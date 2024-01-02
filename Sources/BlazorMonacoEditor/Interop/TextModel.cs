@@ -1,10 +1,10 @@
-﻿namespace Blazor.Monaco.Interop
-{
-    using System;
-    using System.Collections.Generic;
-    using System.Threading.Tasks;
-    using Microsoft.JSInterop;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using Microsoft.JSInterop;
 
+namespace BlazorMonacoEditor.Interop
+{
     /// <summary>
     /// Representation of a text model that can be displayed by the Code Editor.
     /// </summary>

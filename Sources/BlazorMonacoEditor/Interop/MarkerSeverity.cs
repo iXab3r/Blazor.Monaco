@@ -1,4 +1,4 @@
-﻿namespace Blazor.Monaco.Interop
+﻿namespace BlazorMonacoEditor.Interop
 {
     /// <summary>
     /// Implementation of the Monaco MarkerSeverity enum: https://microsoft.github.io/monaco-editor/api/enums/monaco.markerseverity.html.

@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace Blazor.Monaco.Interop
+namespace BlazorMonacoEditor.Interop
 {
     /// <summary>
     /// Implementation of the Monaco IMarkerData interface, https://microsoft.github.io/monaco-editor/api/interfaces/monaco.editor.imarkerdata.html.

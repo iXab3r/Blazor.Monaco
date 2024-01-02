@@ -11,7 +11,7 @@ import '../css/blazor.monaco.css';
 // @ts-ignore
 self.MonacoEnvironment = {
     getWorkerUrl: function (moduleId, label) {
-        return "./_content/Blazor.Monaco/js/editor.worker.bundle.js";
+        return "./_content/BlazorMonacoEditor/js/editor.worker.bundle.js";
     }
 };
 

@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
-namespace Blazor.Monaco.Interop
+namespace BlazorMonacoEditor.Interop
 {
     /// <summary>
     /// Main interop class for communicating with the TypeScript components.

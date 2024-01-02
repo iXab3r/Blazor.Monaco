@@ -1,8 +1,8 @@
-﻿namespace Blazor.Monaco
-{
-    using Blazor.Monaco.Interop;
-    using Microsoft.Extensions.DependencyInjection;
+﻿using BlazorMonacoEditor.Interop;
+using Microsoft.Extensions.DependencyInjection;
 
+namespace BlazorMonacoEditor
+{
     /// <summary>
     /// Extension methods fo
     /// </summary>

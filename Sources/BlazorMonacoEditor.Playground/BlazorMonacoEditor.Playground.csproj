@@ -13,7 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Blazor.Monaco\Blazor.Monaco.csproj" />
+      <ProjectReference Include="..\BlazorMonacoEditor\BlazorMonacoEditor.csproj" />
     </ItemGroup>
 
 </Project>

@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace Blazor.Monaco.Interop
+namespace BlazorMonacoEditor.Interop
 {
     /// <summary>
     /// Represents a Monaco Code Editor instance on the C# Side.

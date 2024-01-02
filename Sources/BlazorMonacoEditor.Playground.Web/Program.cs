@@ -1,4 +1,4 @@
-using Blazor.Monaco;
+using BlazorMonacoEditor;
 
 var builder = Host.CreateDefaultBuilder().ConfigureWebHostDefaults(webBuilder =>
 {

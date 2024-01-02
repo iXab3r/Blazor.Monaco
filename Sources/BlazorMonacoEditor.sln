@@ -3,11 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.6.33829.357
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Blazor.Monaco", "Blazor.Monaco\Blazor.Monaco.csproj", "{5015443E-3449-443A-9519-40836156B005}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorMonacoEditor", "BlazorMonacoEditor\BlazorMonacoEditor.csproj", "{5015443E-3449-443A-9519-40836156B005}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blazor.Monaco.Playground", "Blazor.Monaco.Playground\Blazor.Monaco.Playground.csproj", "{748F4742-4BDF-46AC-9612-A8FCC3CB4AC8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorMonacoEditor.Playground", "BlazorMonacoEditor.Playground\BlazorMonacoEditor.Playground.csproj", "{748F4742-4BDF-46AC-9612-A8FCC3CB4AC8}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Blazor.Monaco.Playground.Web", "Blazor.Monaco.Playground.Web\Blazor.Monaco.Playground.Web.csproj", "{19002593-BDD9-4538-B6F2-62E4B3BF845E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlazorMonacoEditor.Playground.Web", "BlazorMonacoEditor.Playground.Web\BlazorMonacoEditor.Playground.Web.csproj", "{19002593-BDD9-4538-B6F2-62E4B3BF845E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
