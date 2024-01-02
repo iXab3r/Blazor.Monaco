@@ -1,0 +1,6 @@
+﻿@page "/"
+
+<MonacoEditor Uri="@(new Uri("inmemory://test.cs"))" 
+              LanguageId="csharp"
+              Value="var testCode = 123;"
+              OnModelChanged="@(model => {  })"/>

@@ -1,0 +1,29 @@
+{
+  "name": "monaco-blazor-editor",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build-dev": "npx webpack --config webpack.dev.js",
+    "build": "npx webpack --config webpack.dev.js",
+    "build-prod": "npx webpack --config webpack.prod.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "css-loader": "^6.8.1",
+    "file-loader": "^6.2.0",
+    "monaco-editor-webpack-plugin": "^7.1.0",
+    "style-loader": "^3.3.3",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4",
+    "webpack-merge": "^4.2.2"
+  },
+  "dependencies": {
+    "monaco-editor": "^0.45.0"
+  }
+}
