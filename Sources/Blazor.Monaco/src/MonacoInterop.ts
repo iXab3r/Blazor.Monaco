@@ -5,12 +5,13 @@ import { ITextModelContext } from './ITextModelContext';
 import { EditorEventHandler } from './EditorEventHandler';
 import { TextModelEventHandler } from './TextModelEventHandler';
 import { IBlazorInteropObject } from './IBlazorInteropObject';
+import './../wwwroot/css/blazor.monaco.css';
 
 // Initialise the Monaco Environment with the relative URL.
 // @ts-ignore
 self.MonacoEnvironment = {
     getWorkerUrl: function (moduleId, label) {
-        return "./_content/Blazor.Monaco/editor.worker.bundle.js";
+        return "./_content/Blazor.Monaco/js/editor.worker.bundle.js";
     }
 };
 

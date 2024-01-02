@@ -3,7 +3,8 @@ const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 module.exports = {
   entry: {
-     app: "./src/MonacoInterop.ts",
+     monaco: "./src/MonacoInterop.ts",
+     scriptLoader: "./wwwroot/ts/scriptLoader.ts",
     "editor.worker": "monaco-editor/esm/vs/editor/editor.worker.js"
   },
   resolve: {
@@ -12,7 +13,7 @@ module.exports = {
   output: {
     globalObject: "self",
     filename: "[name].bundle.js",
-    path: path.resolve(__dirname, 'wwwroot'),
+    path: path.resolve(__dirname, 'wwwroot/js'),
   },
   module: {
     rules: [
@@ -34,6 +35,6 @@ module.exports = {
     }]
   },
   plugins: [
-    new MonacoWebpackPlugin({publicPath: '/_content/Blazor.Monaco/', languages: []})
+    new MonacoWebpackPlugin({publicPath: '/_content/Blazor.Monaco/'})
   ]
 };

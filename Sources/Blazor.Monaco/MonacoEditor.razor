@@ -25,12 +25,17 @@
   [Parameter]
   public IEnumerable<MarkerData> ModelMarkers { get; set; }
 
+  protected override async Task OnInitializedAsync()
+  {
+      await base.OnInitializedAsync();
+  }
+
   protected override async Task OnAfterRenderAsync(bool firstRender)
   {
       if (firstRender)
       {
           Logger.LogDebug("First Render");
-            
+
           // On the first render, we'll ask our MonacoInterop class to create
           // an editor in the specified container element.
           editor = await MonacoInterop.CreateEditor(monacoContainer);

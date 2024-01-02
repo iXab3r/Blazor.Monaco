@@ -1,8 +1,8 @@
 {
     "compilerOptions": {
       "sourceMap": true,
-      "module": "commonjs",
       "moduleResolution": "node",
+      "module": "CommonJS",
       "target": "es5",
       "outDir": "./dist",
       "lib": ["dom", "es5", "es2015.collection", "es2015.promise"],
@@ -11,6 +11,6 @@
       "jsx": "preserve",
       "typeRoots": ["node_modules/@types"]
     },
-    "include": ["./src/**/*"],
+    "include": ["./src/**/*", "./wwwroot/ts/**/*"],
     "exclude": ["node_modules"]
   }

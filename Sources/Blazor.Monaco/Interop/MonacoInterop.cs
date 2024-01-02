@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
@@ -25,9 +26,10 @@ namespace Blazor.Monaco.Interop
         public MonacoInterop(IJSRuntime jsRuntime, ILoggerFactory logFactory)
         {
             this.jsRuntime = jsRuntime;
+           
             this.logger = logFactory.CreateLogger<MonacoInterop>();
         }
-
+        
         /// <summary>
         /// Create a new Monaco Code Editor, inside the specified HTML element.
         /// </summary>
