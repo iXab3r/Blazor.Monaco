@@ -7,7 +7,7 @@ import { IBlazorInteropObject } from './IBlazorInteropObject';
  */
 export interface IEditorContext 
 {
-    id: string;
+    editorId: string;
     codeEditor: monaco.editor.IStandaloneCodeEditor;
     updating: boolean;
     eventHandler?: EditorEventHandler;

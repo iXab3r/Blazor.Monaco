@@ -1,4 +1,5 @@
 import { IBlazorInteropObject } from './IBlazorInteropObject';
+import { editor, Uri } from 'monaco-editor/esm/vs/editor/editor.api';
 
 /**
  * Text model event handler.
@@ -10,8 +11,8 @@ export class TextModelEventHandler {
         this.eventSink = eventSink;
     }
 
-    public modelUpdated(newValue: string)
+    public handleModelContentChanged(ev: editor.IModelContentChangedEvent)
     {
-        this.eventSink.invokeMethodAsync("ModelUpdated", newValue);
+        this.eventSink.invokeMethodAsync("HandleModelContentChanged", ev);
     }
 }

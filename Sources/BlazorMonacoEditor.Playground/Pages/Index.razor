@@ -1,7 +1,67 @@
 ﻿@page "/"
 @using BlazorMonacoEditor.Interop
+@using Microsoft.CodeAnalysis.Text
+@using ReactiveUI
 
-<MonacoEditor Uri="@(new Uri("inmemory://test.cs"))" 
-              LanguageId="csharp"
-              Value="var testCode = 123;"
-              OnModelChanged="@(model => {  })"/>
+<div class="m-2">
+    <div class=" d-flex my-1 gap-1">
+        <div class="input-group">
+            <input type="checkbox" id="isVisible" @bind="@DataContext.IsVisible"/>
+            <label for="isVisible" class="col-form-label mx-1">Is Visible</label>
+        </div>
+
+        <div class="input-group">
+            <input type="checkbox" id="showLineNumbers" @bind="@DataContext.ShowLineNumbers"/>
+            <label for="showLineNumbers" class="col-form-label mx-1">Show Line Numbers</label>
+        </div>
+        
+         <div class="input-group">
+                    <input type="checkbox" id="showMap" @bind="@DataContext.ShowCodeMap"/>
+                    <label for="showMap" class="col-form-label mx-1">Show Map</label>
+                </div>
+
+        <select @bind="@DataContext.Theme"
+                class="form-control flex-shrink-1">
+            @foreach (var theme in DataContext.KnownThemes)
+            {
+                <option value="@theme">
+                    @theme
+                </option>
+            }
+        </select>
+
+        <select @bind="@DataContext.LanguageId"
+                class="form-control flex-shrink-1">
+            @foreach (var languageId in DataContext.KnownLanguages)
+            {
+                <option value="@languageId">
+                    @languageId
+                </option>
+            }
+        </select>
+
+        <div class="flex-grow-1"></div>
+    </div>
+
+    <textarea class="w-100" rows="4" readonly>@(DataContext.Text.ToString())</textarea>
+</div>
+
+@if (DataContext.IsVisible)
+{
+    <MonacoEditor @bind-LanguageId="@DataContext.LanguageId" 
+                  Theme="@DataContext.Theme" 
+                  @bind-Text="@DataContext.Text"
+                  ShowLineNumbers="@DataContext.ShowLineNumbers"
+                  ShowCodeMap="@DataContext.ShowCodeMap"/>
+}
+
+@code {
+
+    public IndexViewModel DataContext { get; } = new();
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+    }
+
+}

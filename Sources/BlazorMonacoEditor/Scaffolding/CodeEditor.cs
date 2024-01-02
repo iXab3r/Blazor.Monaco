@@ -1,12 +1,14 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
+using BlazorMonacoEditor.Interop;
 
-namespace BlazorMonacoEditor.Interop
+namespace BlazorMonacoEditor.Scaffolding
 {
     /// <summary>
     /// Represents a Monaco Code Editor instance on the C# Side.
     /// Calling methods on this object will effect the corresponding editor.
     /// </summary>
-    public class CodeEditor
+    internal sealed class CodeEditor : IAsyncDisposable
     {
         private readonly MonacoInterop interop;
 
@@ -40,6 +42,11 @@ namespace BlazorMonacoEditor.Interop
             }
 
             await interop.InvokeVoidAsync("setEditorModel", Id, model.Uri.ToString());
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await interop.DisposeEditor(this);
         }
     }
 }

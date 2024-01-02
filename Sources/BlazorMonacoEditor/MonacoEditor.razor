@@ -1,35 +1,98 @@
 ﻿@using BlazorMonacoEditor.Interop
+@using BlazorMonacoEditor.Scaffolding
+@using Microsoft.CodeAnalysis.Text
+@using System.Reactive.Subjects
+@using System.Reactive.Disposables
 @inject MonacoInterop MonacoInterop
 @inject ILogger<MonacoEditor> Logger
+@implements IAsyncDisposable
 
 <div @ref="monacoContainer" class="monaco-editor-container"></div>
 
 @code {
   private ElementReference monacoContainer;
-  private CodeEditor editor;
-  private TextModel currentTextModel;
-  private Uri lastUri;
-  private IEnumerable<MarkerData> currentMarkers;
+  private CodeEditor? editor;
+  private TextModel? currentTextModel;
+  private SourceText sourceText = SourceText.From(string.Empty);
+  private string languageId = string.Empty;
+
+  private readonly MonacoRoslynAdapter roslynAdapter = new();
+  private readonly Subject<ModelContentChangedEventArgs> modelContentChangesSink = new();
+  private readonly CompositeDisposable anchors = new();
+  private bool showLineNumbers;
+  private bool showCodeMap;
 
   [Parameter]
-  public Uri Uri { get; set; }
-
-  [Parameter]
-  public string Value { get; set; }
-
-  [Parameter]
-  public string LanguageId { get; set; }
-
-  [Parameter]
-  public EventCallback<TextModel> OnModelChanged { get; set; }
-
-  [Parameter]
-  public IEnumerable<MarkerData> ModelMarkers { get; set; }
-
-  protected override async Task OnInitializedAsync()
+  public SourceText Text
   {
-      await base.OnInitializedAsync();
+      get => sourceText;
+      set
+      {
+          if (ReferenceEquals(sourceText, value) || sourceText.ContentEquals(value))
+          {
+              return;
+          }
+
+          sourceText = value;
+          TextChanged.InvokeAsync(value);
+      }
   }
+  
+  [Parameter] public EventCallback<SourceText> TextChanged { get; set; }
+
+  [Parameter]
+  public string LanguageId
+  {
+      get => languageId;
+      set
+      {
+          if (string.Equals(languageId, value))
+          {
+              return;
+          }
+          languageId = value;
+          LanguageIdChanged.InvokeAsync(value);
+      }
+  }
+  
+  [Parameter] public EventCallback<string> LanguageIdChanged { get; set; }
+
+  [Parameter]
+  public string? Theme { get; set; }
+
+  [Parameter]
+  public bool ShowLineNumbers
+  {
+      get => showLineNumbers;
+      set
+      {
+          if (showLineNumbers == value)
+          {
+              return;
+          }
+          showLineNumbers = value;
+          ShowLineNumbersChanged.InvokeAsync(value);
+      }
+  }
+
+  [Parameter] public EventCallback<bool> ShowLineNumbersChanged { get; set; }
+  
+  [Parameter]
+  public bool ShowCodeMap
+  {
+      get => showCodeMap;
+      set
+      {
+          if (showCodeMap == value)
+          {
+              return;
+          }
+          showCodeMap = value;
+          ShowCodeMapChanged.InvokeAsync(value);
+      }
+  }
+
+  [Parameter] public EventCallback<bool> ShowCodeMapChanged { get; set; }
 
   protected override async Task OnAfterRenderAsync(bool firstRender)
   {
@@ -37,75 +100,85 @@
       {
           Logger.LogDebug("First Render");
 
-          // On the first render, we'll ask our MonacoInterop class to create
-          // an editor in the specified container element.
           editor = await MonacoInterop.CreateEditor(monacoContainer);
-
           Logger.LogDebug("Editor Created");
+          await UpdateOptions();
 
-          // Other state changes may have happened by the time we reach this
-          // point, so we'll set the model if there is one.
-          if(currentTextModel is object)
-          {
-              await editor.SetModel(currentTextModel);
-          }
+          currentTextModel = await MonacoInterop.CreateTextModel(new Uri($"inmemory://{editor.Id}/file"), string.Empty, LanguageId);
+
+          Logger.LogDebug($"Created model: {currentTextModel}");
+          await editor.SetModel(currentTextModel);
+      
+          var content = sourceText.ToString();
+          await currentTextModel.SetContent(content);
+          
+          currentTextModel.OnModelContentChanged += OnModelContentChanged;
+
+          anchors.Add(modelContentChangesSink
+              .Subscribe(x =>
+              {
+                  var currentText = Text;
+                  var updatedText = roslynAdapter.ApplyChanges(currentText, x);
+                  Text = updatedText;
+              }));
+          
       }
+  }
+
+  protected override async Task OnInitializedAsync()
+  {
+      await base.OnInitializedAsync();
   }
 
   protected override async Task OnParametersSetAsync()
   {
-      // Only change the loaded model if the file URI is different.
-      if(Uri != lastUri)
+      await base.OnParametersSetAsync();
+
+      if (editor != null)
       {
-          Logger.LogDebug("Changing Model");
-          lastUri = Uri;
-
-          if (currentTextModel is object)
-          {
-              // Detach events.
-              currentTextModel.OnModelChanged -= ModelChangedHandler;
-          }
-
-          // Completely new model; create one.
-          currentTextModel = await MonacoInterop.CreateTextModel(Uri, Value, LanguageId);
-
-          // Attach events.
-          currentTextModel.OnModelChanged += ModelChangedHandler;
-
-          if(editor is object)
-          {
-              await editor.SetModel(currentTextModel);
-          }
-
-          if(ModelMarkers != null)
-          {
-              currentMarkers = ModelMarkers;
-              await currentTextModel.SetMarkers(null, currentMarkers);
-          }
-      }
-      else if(currentTextModel is object)
-      {
-          // Change the model content.
-          if(Value != currentTextModel.InitialValue)
-          {
-              await currentTextModel.SetContent(Value);
-          }
-
-          if(currentMarkers != ModelMarkers)
-          {
-              Logger.LogDebug("Markers Changing");
-              currentMarkers = ModelMarkers;
-              await currentTextModel.SetMarkers(null, currentMarkers);
-          }
+          await UpdateOptions();
       }
   }
 
-  private void ModelChangedHandler(object textModel, string newValue)
+  private async Task UpdateOptions()
   {
-      // Make sure the event is still relevant.
-      if(ReferenceEquals(textModel, currentTextModel))
+      if (editor == null)
       {
-          OnModelChanged.InvokeAsync(currentTextModel);
+          throw new InvalidOperationException("Editor is not loaded yet");
+      }
+      var options = new EditorOptions()
+      {
+          LineNumbers = ShowLineNumbers ? "on" : "off",
+          Minimap = new EditorMinimapOptions()
+          {
+              Enabled = ShowCodeMap
+          }
+      };
+      await MonacoInterop.UpdateOptions(editor, options);
+  }
+
+  public override async Task SetParametersAsync(ParameterView parameters)
+  {
+      await base.SetParametersAsync(parameters);
+  }
+
+  private void OnModelContentChanged(object? sender, ModelContentChangedEventArgs e)
+  {
+      modelContentChangesSink.OnNext(e);
+  }
+
+  public async ValueTask DisposeAsync()
+  {
+      anchors.Dispose();
+      
+      if (editor != null)
+      {
+          await editor.DisposeAsync();
+      }
+
+      if (currentTextModel != null)
+      {
+          await currentTextModel.DisposeAsync();
       }
   }
 }

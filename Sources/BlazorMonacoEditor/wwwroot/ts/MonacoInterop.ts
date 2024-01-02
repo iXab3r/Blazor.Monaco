@@ -1,5 +1,4 @@
 import { editor, Uri } from 'monaco-editor/esm/vs/editor/editor.api';
-import { languages } from 'monaco-editor/esm/metadata';
 import { IEditorContext } from './IEditorContext';
 import { ITextModelContext } from './ITextModelContext';
 import { EditorEventHandler } from './EditorEventHandler';
@@ -15,18 +14,9 @@ self.MonacoEnvironment = {
     }
 };
 
-/**
- * Monaco Interop TypeScript
- * */
 class MonacoInterop {
 
-    /**
-     * Set of created editors
-     */
     private editors: { [id: string]: IEditorContext } = {};
-    /**
-     * Set of created text models
-     */
     private models: { [uri: string]: ITextModelContext } = {};
     
     constructor()
@@ -36,25 +26,36 @@ class MonacoInterop {
 
     /**
      * Create an editor control.
-     * @param id The id of the control (to reference it later)
+     * @param editorId The id of the control (to reference it later)
      * @param container The HTML Element container.
      * @param blazorCallback An object on which to invoke event methods.
      */
-    createEditor(id: string, container: HTMLElement, blazorCallback: IBlazorInteropObject) {
-
+    createEditor(editorId: string, container: HTMLElement, blazorCallback: IBlazorInteropObject) {
         const newEditor = editor.create(container);
 
         const editorContext: IEditorContext = {
-            id: id,
+            editorId: editorId,
             codeEditor: newEditor,
             updating: false,
             eventHandler: new EditorEventHandler(blazorCallback),
             eventSink: blazorCallback
         };
 
-        this.editors[id] = editorContext;
+        this.editors[editorId] = editorContext;
     }
-
+    
+    disposeEditor(editorId: string){
+        const editorCtxt = this.getEditorById(editorId);
+        this.editors[editorId] = null;
+        editorCtxt.codeEditor.dispose();
+    }
+    
+    updateEditorOptions(editorId: string, newOptions: editor.IEditorOptions & editor.IGlobalEditorOptions){
+        console.info(`Updating editor options: ${JSON.stringify(newOptions)}`);
+        const editorCtxt = this.getEditorById(editorId);
+        editorCtxt.codeEditor.updateOptions(newOptions);
+    }
+    
     /**
      * Create a new text model.
      * @param uri The URI of the model.
@@ -67,7 +68,7 @@ class MonacoInterop {
         const monacoUri = Uri.parse(uri);
 
         const model = editor.createModel(value, language, monacoUri);
-
+        
         const modelContext: ITextModelContext = {
             textModel: model,
             changeTimer: 0,
@@ -76,26 +77,19 @@ class MonacoInterop {
             eventSink: blazorCallback
         };
 
-        // Attach events to the model.
         model.onDidChangeContent(ev => {
 
-            if (modelContext.changeTimer)
-            {
-                clearTimeout(modelContext.changeTimer);
-                modelContext.changeTimer = 0;
-            }
-
-            modelContext.changeTimer = setTimeout(() => {
-
-                modelContext.changeTimer = 0;
-                // Wait 1 second for someone to finish typing,
-                // then raise the event.
-                modelContext.eventHandler.modelUpdated(model.getValue());
-
-            }, 1000);
+            modelContext.eventHandler.handleModelContentChanged(ev);
         });
 
         this.models[uri] = modelContext;
+    }
+
+    disposeTextModel(textModelUri: string){
+        const modelCtxt = this.getTextModelByUri(textModelUri);
+
+        this.models[textModelUri] = null;
+        modelCtxt.textModel.dispose();
     }
 
     /**
@@ -106,11 +100,7 @@ class MonacoInterop {
      */
     setModelMarkers(textModelUri: string, owner: string, markers: editor.IMarkerData[])
     {
-        const modelCtxt = this.models[textModelUri];
-
-        if (!modelCtxt) {
-            throw "Specified model not created.";
-        }
+        const modelCtxt = this.getTextModelByUri(textModelUri);
 
         editor.setModelMarkers(modelCtxt.textModel, owner, markers);
 
@@ -127,13 +117,19 @@ class MonacoInterop {
      */
     setModelContent(textModelUri: string, newContent: string)
     {
-        const modelCtxt = this.models[textModelUri];
-
-        if (!modelCtxt) {
-            throw "Specified model not created.";
-        }
-
+        const modelCtxt = this.getTextModelByUri(textModelUri);
         modelCtxt.textModel.setValue(newContent);
+    }
+
+    /**
+     * Sets the content for a model.
+     * @param textModelUri The text model URI.
+     * @param languageId LanguageId
+     */
+    setEditorModelLanguage(textModelUri: string, languageId: string)
+    {
+        const modelCtxt = this.getTextModelByUri(textModelUri);
+        editor.setModelLanguage(modelCtxt.textModel, languageId);
     }
 
     /**
@@ -143,23 +139,28 @@ class MonacoInterop {
      */
     setEditorModel(editorId: string, textModelUri: string)
     {
-        const editorCtxt = this.editors[editorId];
+        const editorCtxt = this.getEditorById(editorId);
+        const modelCtxt = this.getTextModelByUri(textModelUri);
+        editorCtxt.codeEditor.setModel(modelCtxt.textModel);
+    }
+    
+    getTextModelByUri(textModelUri: string) : ITextModelContext{
         const modelCtxt = this.models[textModelUri];
-
-        if (!editorCtxt)
-        {
-            throw "Specified editor not created.";
-        }
-
         if (!modelCtxt)
         {
-            throw "Specified model not created.";
+            throw `Specified model ${textModelUri} is not created.`;
         }
-
-        editorCtxt.codeEditor.setModel(modelCtxt.textModel);
+        return modelCtxt;
+    }
+    
+    getEditorById(editorId: string) : IEditorContext{
+        const editorCtxt = this.editors[editorId];
+        if (!editorCtxt)
+        {
+            throw `Specified editor ${editorId} is not created.`;
+        }
+        return editorCtxt;
     }
 }
 
-// This is what we'll export to the 'window' for monaco
-// interop work.
 window['monacoInterop'] = new MonacoInterop();

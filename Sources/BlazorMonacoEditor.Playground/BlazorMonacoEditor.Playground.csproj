@@ -2,14 +2,13 @@
 
     <PropertyGroup>
         <TargetFramework>net7.0</TargetFramework>
-        <Nullable>enable</Nullable>
-        <ImplicitUsings>enable</ImplicitUsings>
         <EnableDefaultContentItems>true</EnableDefaultContentItems>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="7.0.0"/>
         <PackageReference Include="Microsoft.AspNetCore.Components" Version="7.0.0"/>
+        <PackageReference Include="ReactiveUI.Fody" Version="19.5.31" />
     </ItemGroup>
 
     <ItemGroup>

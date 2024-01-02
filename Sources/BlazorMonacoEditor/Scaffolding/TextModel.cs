@@ -1,14 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using BlazorMonacoEditor.Interop;
 using Microsoft.JSInterop;
 
-namespace BlazorMonacoEditor.Interop
+namespace BlazorMonacoEditor.Scaffolding
 {
     /// <summary>
     /// Representation of a text model that can be displayed by the Code Editor.
     /// </summary>
-    public class TextModel
+    internal sealed class TextModel : IAsyncDisposable
     {
         private readonly MonacoInterop interop;
 
@@ -16,14 +16,14 @@ namespace BlazorMonacoEditor.Interop
         /// Initializes a new instance of the <see cref="TextModel"/> class.
         /// </summary>
         /// <param name="uri">The file URI.</param>
-        /// <param name="initialValue">Initial value of the model.</param>
+        /// <param name="initialText">Initial value of the model.</param>
         /// <param name="interop">The interop instance.</param>
-        internal TextModel(Uri uri, string initialValue, MonacoInterop interop)
+        internal TextModel(Uri uri, string initialText, MonacoInterop interop)
         {
             Uri = uri;
             this.interop = interop;
-            InitialValue = initialValue;
-            CurrentValue = initialValue;
+            InitialText = initialText;
+            Text = initialText;
         }
 
         /// <summary>
@@ -39,42 +39,22 @@ namespace BlazorMonacoEditor.Interop
         /// <summary>
         /// Gets the initial model value (as loaded from the store).
         /// </summary>
-        public string InitialValue { get; private set; }
+        public string InitialText { get; private set; }
 
         /// <summary>
         /// Gets the current value of the model.
         /// </summary>
-        public string CurrentValue { get; private set; }
+        public string Text { get; private set; }
 
         /// <summary>
         /// Gets or sets the OnModelChanged event handler.
         /// </summary>
-        public EventHandler<string> OnModelChanged { get; set; }
-
-        /// <summary>
-        /// Invoked by JS interop when the content of the model has changed.
-        /// </summary>
-        /// <param name="newValue">The new content of the model.</param>
+        public EventHandler<ModelContentChangedEventArgs> OnModelContentChanged { get; set; }
+        
         [JSInvokable]
-        public void ModelUpdated(string newValue)
+        public void HandleModelContentChanged(ModelContentChangedEventArgs args)
         {
-            CurrentValue = newValue;
-
-            if (OnModelChanged is object)
-            {
-                OnModelChanged(this, newValue);
-            }
-        }
-
-        /// <summary>
-        /// Set the markers on the model.
-        /// </summary>
-        /// <param name="owner">The marker owner name.</param>
-        /// <param name="markers">The set of markers.</param>
-        /// <returns>Completion task.</returns>
-        public async ValueTask SetMarkers(string owner, IEnumerable<MarkerData> markers)
-        {
-            await interop.SetModelMarkers(this, owner, markers);
+            OnModelContentChanged?.Invoke(this, args);
         }
 
         /// <summary>
@@ -84,9 +64,14 @@ namespace BlazorMonacoEditor.Interop
         /// <returns>Completion task.</returns>
         public async ValueTask SetContent(string content)
         {
-            InitialValue = content;
+            InitialText = content;
             await interop.SetModelContent(this, content);
-            CurrentValue = content;
+            Text = content;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await interop.DisposeModel(this);
         }
     }
 }

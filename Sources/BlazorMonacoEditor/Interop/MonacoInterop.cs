@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using BlazorMonacoEditor.Scaffolding;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
@@ -10,7 +11,7 @@ namespace BlazorMonacoEditor.Interop
     /// <summary>
     /// Main interop class for communicating with the TypeScript components.
     /// </summary>
-    public class MonacoInterop
+    internal sealed class MonacoInterop
     {
         private const string InteropPrefix = "monacoInterop.";
 
@@ -36,7 +37,7 @@ namespace BlazorMonacoEditor.Interop
         /// <returns>A code editor.</returns>
         public async ValueTask<CodeEditor> CreateEditor(ElementReference element)
         {
-            var editorId = Guid.NewGuid().ToString();
+            var editorId = $"Monaco-{Guid.NewGuid().ToString().Replace("-", "")}";
 
             var monacoEditor = new CodeEditor(editorId, this);
 
@@ -64,26 +65,56 @@ namespace BlazorMonacoEditor.Interop
                 LanguageId = languageId,
             };
 
-            await InvokeVoidAsync("createTextModel", textModel.Uri.ToString(), textModel.InitialValue, DotNetObjectReference.Create(textModel), textModel.LanguageId);
+            await InvokeVoidAsync("createTextModel", textModel.Uri.ToString(), textModel.InitialText, DotNetObjectReference.Create(textModel), textModel.LanguageId);
 
             return textModel;
         }
+        
+        /// <summary>
+        /// Sets the content of a given model.
+        /// </summary>
+        /// <returns>Completion task.</returns>
+        public async ValueTask DisposeEditor(CodeEditor editor)
+        {
+            if (editor is null)
+            {
+                throw new ArgumentNullException(nameof(editor));
+            }
+
+            await InvokeVoidAsync("disposeEditor", editor.Id);
+        }
+
+        public async ValueTask UpdateOptions(CodeEditor editor, EditorOptions options)
+        {
+            if (editor is null)
+            {
+                throw new ArgumentNullException(nameof(editor));
+            }
+            await InvokeVoidAsync("updateEditorOptions", editor.Id, options);
+        }
+        
+        public async ValueTask UpdateOptions(CodeEditor editor, GlobalEditorOptions options)
+        {
+            if (editor is null)
+            {
+                throw new ArgumentNullException(nameof(editor));
+            }
+            await InvokeVoidAsync("updateEditorOptions", editor.Id, options);
+        }
 
         /// <summary>
-        /// Set the model markers for a specific text model.
+        /// Sets the content of a given model.
         /// </summary>
-        /// <param name="model">The text model.</param>
-        /// <param name="owner">The named owner of the markers.</param>
-        /// <param name="markers">The markers.</param>
+        /// <param name="model">The text model to update.</param>
         /// <returns>Completion task.</returns>
-        public async ValueTask SetModelMarkers(TextModel model, string owner, IEnumerable<MarkerData> markers)
+        public async ValueTask DisposeModel(TextModel model)
         {
             if (model is null)
             {
                 throw new ArgumentNullException(nameof(model));
             }
 
-            await InvokeVoidAsync("setModelMarkers", model.Uri.ToString(), owner, markers);
+            await InvokeVoidAsync("disposeTextModel", model.Uri.ToString());
         }
 
         /// <summary>
