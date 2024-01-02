@@ -3,7 +3,7 @@ const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 module.exports = {
   entry: {
-     monaco: "./src/MonacoInterop.ts",
+     monaco: "./wwwroot/ts/MonacoInterop.ts",
      scriptLoader: "./wwwroot/ts/scriptLoader.ts",
     "editor.worker": "monaco-editor/esm/vs/editor/editor.worker.js"
   },
