@@ -10,7 +10,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components" Version="6.0.25"/>
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.25"/>
-        <PackageReference Include="Microsoft.CodeAnalysis" Version="4.6.0" />
+        <PackageReference Include="Microsoft.CodeAnalysis" Version="4.9.0-2.final" />
         <PackageReference Include="System.Reactive" Version="6.0.0" />
     </ItemGroup>
 
