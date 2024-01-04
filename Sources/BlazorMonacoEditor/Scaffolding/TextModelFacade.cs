@@ -8,23 +8,26 @@ namespace BlazorMonacoEditor.Scaffolding
     /// <summary>
     /// Representation of a text model that can be displayed by the Code Editor.
     /// </summary>
-    internal sealed class TextModel : IAsyncDisposable
+    internal sealed class TextModelFacade : IAsyncDisposable
     {
         private readonly MonacoInterop interop;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="TextModel"/> class.
+        /// Initializes a new instance of the <see cref="TextModelFacade"/> class.
         /// </summary>
         /// <param name="uri">The file URI.</param>
         /// <param name="initialText">Initial value of the model.</param>
         /// <param name="interop">The interop instance.</param>
-        internal TextModel(Uri uri, string initialText, MonacoInterop interop)
+        internal TextModelFacade(Uri uri, string initialText, MonacoInterop interop)
         {
             Uri = uri;
             this.interop = interop;
             InitialText = initialText;
             Text = initialText;
+            ObjectReference = DotNetObjectReference.Create(this);
         }
+        
+        public DotNetObjectReference<TextModelFacade> ObjectReference { get; }
 
         /// <summary>
         /// Gets the URI of the model.

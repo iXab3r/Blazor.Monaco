@@ -11,8 +11,8 @@
 
 @code {
   private ElementReference monacoContainer;
-  private CodeEditor? editor;
-  private TextModel? currentTextModel;
+  private CodeEditorFacade? editor;
+  private TextModelFacade? currentTextModel;
   private SourceText sourceText = SourceText.From(string.Empty);
   private string languageId = string.Empty;
 

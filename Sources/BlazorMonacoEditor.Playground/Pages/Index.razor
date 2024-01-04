@@ -1,7 +1,9 @@
 ﻿@page "/"
 @using BlazorMonacoEditor.Interop
+@using BlazorMonacoEditor.Services
 @using Microsoft.CodeAnalysis.Text
 @using ReactiveUI
+@inject IMonacoInterop MonacoInterop
 
 <div class="m-2">
     <div class=" d-flex my-1 gap-1">
@@ -14,11 +16,15 @@
             <input type="checkbox" id="showLineNumbers" @bind="@DataContext.ShowLineNumbers"/>
             <label for="showLineNumbers" class="col-form-label mx-1">Show Line Numbers</label>
         </div>
-        
-         <div class="input-group">
-                    <input type="checkbox" id="showMap" @bind="@DataContext.ShowCodeMap"/>
-                    <label for="showMap" class="col-form-label mx-1">Show Map</label>
-                </div>
+
+        <div class="input-group">
+            <input type="checkbox" id="showMap" @bind="@DataContext.ShowCodeMap"/>
+            <label for="showMap" class="col-form-label mx-1">Show Map</label>
+        </div>
+
+        <div class="input-group">
+            <button id="addCompletionProvider" onclick="@(async () => { await MonacoInterop.RegisterCompletionProvider("csharp", DataContext); })">Register CompletionProvider</button>
+        </div>
 
         <select @bind="@DataContext.Theme"
                 class="form-control flex-shrink-1">
@@ -43,14 +49,14 @@
         <div class="flex-grow-1"></div>
     </div>
 
-    <textarea class="w-100" rows="4" readonly>@(DataContext.Text.ToString())</textarea>
+    <textarea class="w-100" rows="4" readonly>@(DataContext.SourceCode.ToString())</textarea>
 </div>
 
 @if (DataContext.IsVisible)
 {
-    <MonacoEditor @bind-LanguageId="@DataContext.LanguageId" 
-                  Theme="@DataContext.Theme" 
-                  @bind-Text="@DataContext.Text"
+    <MonacoEditor @bind-LanguageId="@DataContext.LanguageId"
+                  Theme="@DataContext.Theme"
+                  @bind-Text="@DataContext.SourceCode"
                   ShowLineNumbers="@DataContext.ShowLineNumbers"
                   ShowCodeMap="@DataContext.ShowCodeMap"/>
 }

@@ -8,16 +8,16 @@ namespace BlazorMonacoEditor.Scaffolding
     /// Represents a Monaco Code Editor instance on the C# Side.
     /// Calling methods on this object will effect the corresponding editor.
     /// </summary>
-    internal sealed class CodeEditor : IAsyncDisposable
+    internal sealed class CodeEditorFacade : IAsyncDisposable
     {
         private readonly MonacoInterop interop;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CodeEditor"/> class.
+        /// Initializes a new instance of the <see cref="CodeEditorFacade"/> class.
         /// </summary>
         /// <param name="id">The editor ID.</param>
         /// <param name="interop">The shared monaco interop wrapper.</param>
-        public CodeEditor(string id, MonacoInterop interop)
+        public CodeEditorFacade(string id, MonacoInterop interop)
         {
             Id = id;
             this.interop = interop;
@@ -34,7 +34,7 @@ namespace BlazorMonacoEditor.Scaffolding
         /// </summary>
         /// <param name="model">The text model to change to.</param>
         /// <returns>A completion task.</returns>
-        public async ValueTask SetModel(TextModel model)
+        public async ValueTask SetModel(TextModelFacade model)
         {
             if (model is null)
             {

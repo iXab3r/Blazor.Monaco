@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Scaffolding;
+using BlazorMonacoEditor.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
@@ -11,7 +12,7 @@ namespace BlazorMonacoEditor.Interop
     /// <summary>
     /// Main interop class for communicating with the TypeScript components.
     /// </summary>
-    internal sealed class MonacoInterop
+    internal sealed class MonacoInterop : IMonacoInterop
     {
         private const string InteropPrefix = "monacoInterop.";
 
@@ -35,11 +36,11 @@ namespace BlazorMonacoEditor.Interop
         /// </summary>
         /// <param name="element">The HTML element.</param>
         /// <returns>A code editor.</returns>
-        public async ValueTask<CodeEditor> CreateEditor(ElementReference element)
+        public async ValueTask<CodeEditorFacade> CreateEditor(ElementReference element)
         {
             var editorId = $"Monaco-{Guid.NewGuid().ToString().Replace("-", "")}";
 
-            var monacoEditor = new CodeEditor(editorId, this);
+            var monacoEditor = new CodeEditorFacade(editorId, this);
 
             await InvokeVoidAsync("createEditor", editorId, element, DotNetObjectReference.Create(monacoEditor));
 
@@ -53,28 +54,35 @@ namespace BlazorMonacoEditor.Interop
         /// <param name="value">The value of the model (i.e. content of the file).</param>
         /// <param name="languageId">The language ID for the file.</param>
         /// <returns>A text model.</returns>
-        public async ValueTask<TextModel> CreateTextModel(Uri uri, string value, string languageId = null)
+        public async ValueTask<TextModelFacade> CreateTextModel(Uri uri, string value, string languageId = null)
         {
             if (uri is null)
             {
                 throw new ArgumentNullException(nameof(uri));
             }
 
-            var textModel = new TextModel(uri, value, this)
+            var textModel = new TextModelFacade(uri, value, this)
             {
                 LanguageId = languageId,
             };
 
-            await InvokeVoidAsync("createTextModel", textModel.Uri.ToString(), textModel.InitialText, DotNetObjectReference.Create(textModel), textModel.LanguageId);
+            await InvokeVoidAsync("createTextModel", textModel.Uri.ToString(), textModel.InitialText, textModel.ObjectReference, textModel.LanguageId);
 
             return textModel;
+        }
+        
+        public async ValueTask<IAsyncDisposable> RegisterCompletionProvider(string languageId, ICompletionProvider completionProvider)
+        {
+            var completionProviderFacade = new CompletionProviderFacade(completionProvider);
+            await InvokeVoidAsync("registerCompletionProvider", languageId, completionProviderFacade.ObjectReference);
+            return completionProviderFacade;
         }
         
         /// <summary>
         /// Sets the content of a given model.
         /// </summary>
         /// <returns>Completion task.</returns>
-        public async ValueTask DisposeEditor(CodeEditor editor)
+        public async ValueTask DisposeEditor(CodeEditorFacade editor)
         {
             if (editor is null)
             {
@@ -84,7 +92,7 @@ namespace BlazorMonacoEditor.Interop
             await InvokeVoidAsync("disposeEditor", editor.Id);
         }
 
-        public async ValueTask UpdateOptions(CodeEditor editor, EditorOptions options)
+        public async ValueTask UpdateOptions(CodeEditorFacade editor, EditorOptions options)
         {
             if (editor is null)
             {
@@ -93,7 +101,7 @@ namespace BlazorMonacoEditor.Interop
             await InvokeVoidAsync("updateEditorOptions", editor.Id, options);
         }
         
-        public async ValueTask UpdateOptions(CodeEditor editor, GlobalEditorOptions options)
+        public async ValueTask UpdateOptions(CodeEditorFacade editor, GlobalEditorOptions options)
         {
             if (editor is null)
             {
@@ -107,7 +115,7 @@ namespace BlazorMonacoEditor.Interop
         /// </summary>
         /// <param name="model">The text model to update.</param>
         /// <returns>Completion task.</returns>
-        public async ValueTask DisposeModel(TextModel model)
+        public async ValueTask DisposeModel(TextModelFacade model)
         {
             if (model is null)
             {
@@ -123,7 +131,7 @@ namespace BlazorMonacoEditor.Interop
         /// <param name="model">The text model to update.</param>
         /// <param name="newContent">The new content of the file.</param>
         /// <returns>Completion task.</returns>
-        public async ValueTask SetModelContent(TextModel model, string newContent)
+        public async ValueTask SetModelContent(TextModelFacade model, string newContent)
         {
             if (model is null)
             {

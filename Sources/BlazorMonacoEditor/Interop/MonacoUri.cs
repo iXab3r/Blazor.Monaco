@@ -1,15 +1,16 @@
+using System;
 using System.Text.Json.Serialization;
 
 namespace BlazorMonacoEditor.Interop;
 
-public sealed class UriComponents
+public sealed record MonacoUri
 {
     /// <summary>
     /// The scheme of the URI, such as 'http' or 'https'.
     /// </summary>
     [JsonPropertyName("scheme")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public string Scheme { get; init; } = string.Empty;
+    public string? Scheme { get; init; } 
 
     /// <summary>
     /// The authority part of the URI, such as 'www.example.com'.
@@ -42,4 +43,9 @@ public sealed class UriComponents
     [JsonPropertyName("fragment")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public string? Fragment { get; init; }
+
+    public Uri ToUri()
+    {
+        return new Uri($"{Scheme}://{Authority}{Path}");
+    }
 }

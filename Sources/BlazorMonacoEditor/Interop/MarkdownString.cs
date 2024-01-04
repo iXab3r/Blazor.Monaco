@@ -17,7 +17,7 @@ public sealed record MarkdownString
     /// </summary>
     [JsonPropertyName("isTrusted")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public object? IsTrusted { get; init; }
+    public bool? IsTrusted { get; init; }
 
     /// <summary>
     /// Indicates whether theme icons are supported in the markdown string.
@@ -38,12 +38,12 @@ public sealed record MarkdownString
     /// </summary>
     [JsonPropertyName("baseUri")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public UriComponents? BaseUri { get; init; }
+    public MonacoUri? BaseUri { get; init; }
 
     /// <summary>
     /// A dictionary mapping href strings to URI components.
     /// </summary>
     [JsonPropertyName("uris")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public Dictionary<string, UriComponents>? Uris { get; init; }
+    public Dictionary<string, MonacoUri>? Uris { get; init; }
 }

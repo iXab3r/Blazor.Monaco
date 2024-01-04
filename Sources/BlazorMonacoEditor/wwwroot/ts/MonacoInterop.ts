@@ -1,9 +1,9 @@
-import { editor, Uri } from 'monaco-editor/esm/vs/editor/editor.api';
 import { IEditorContext } from './IEditorContext';
 import { ITextModelContext } from './ITextModelContext';
 import { EditorEventHandler } from './EditorEventHandler';
 import { TextModelEventHandler } from './TextModelEventHandler';
 import { IBlazorInteropObject } from './IBlazorInteropObject';
+import * as monaco from 'monaco-editor';
 import '../css/blazor.monaco.css';
 
 // Initialise the Monaco Environment with the relative URL.
@@ -21,7 +21,7 @@ class MonacoInterop {
     
     constructor()
     {
-        editor.setTheme('vs-dark');
+        monaco.editor.setTheme('vs-dark');
     }
 
     /**
@@ -31,7 +31,7 @@ class MonacoInterop {
      * @param blazorCallback An object on which to invoke event methods.
      */
     createEditor(editorId: string, container: HTMLElement, blazorCallback: IBlazorInteropObject) {
-        const newEditor = editor.create(container);
+        const newEditor = monaco.editor.create(container);
 
         const editorContext: IEditorContext = {
             editorId: editorId,
@@ -50,7 +50,7 @@ class MonacoInterop {
         editorCtxt.codeEditor.dispose();
     }
     
-    updateEditorOptions(editorId: string, newOptions: editor.IEditorOptions & editor.IGlobalEditorOptions){
+    updateEditorOptions(editorId: string, newOptions: monaco.editor.IEditorOptions & monaco.editor.IGlobalEditorOptions){
         console.info(`Updating editor options: ${JSON.stringify(newOptions)}`);
         const editorCtxt = this.getEditorById(editorId);
         editorCtxt.codeEditor.updateOptions(newOptions);
@@ -65,9 +65,9 @@ class MonacoInterop {
      */
     createTextModel(uri: string, value: string, blazorCallback: IBlazorInteropObject, language?: string)
     {
-        const monacoUri = Uri.parse(uri);
+        const monacoUri = monaco.Uri.parse(uri);
 
-        const model = editor.createModel(value, language, monacoUri);
+        const model = monaco.editor.createModel(value, language, monacoUri);
         
         const modelContext: ITextModelContext = {
             textModel: model,
@@ -98,11 +98,11 @@ class MonacoInterop {
      * @param owner The owner of the markers.
      * @param markers The full set of new markers for the model.
      */
-    setModelMarkers(textModelUri: string, owner: string, markers: editor.IMarkerData[])
+    setModelMarkers(textModelUri: string, owner: string, markers: monaco.editor.IMarkerData[])
     {
         const modelCtxt = this.getTextModelByUri(textModelUri);
 
-        editor.setModelMarkers(modelCtxt.textModel, owner, markers);
+        monaco.editor.setModelMarkers(modelCtxt.textModel, owner, markers);
 
         // Force a background re-tokenise when we get the model markers through, because compilation changes may have caused
         // everything to change.
@@ -129,7 +129,7 @@ class MonacoInterop {
     setEditorModelLanguage(textModelUri: string, languageId: string)
     {
         const modelCtxt = this.getTextModelByUri(textModelUri);
-        editor.setModelLanguage(modelCtxt.textModel, languageId);
+        monaco.editor.setModelLanguage(modelCtxt.textModel, languageId);
     }
 
     /**
@@ -160,6 +160,17 @@ class MonacoInterop {
             throw `Specified editor ${editorId} is not created.`;
         }
         return editorCtxt;
+    }
+
+    registerCompletionProvider(languageId: string, blazorCallback: IBlazorInteropObject) {
+        monaco.languages.registerCompletionItemProvider(languageId, {
+            provideCompletionItems: async (model: monaco.editor.ITextModel, position: monaco.IPosition, completionContext: monaco.languages.CompletionContext) => {
+                console.info(`Completion request, model uri: ${model.uri}, position: ${position}`);
+                const caretOffset = model.getOffsetAt(position);
+                const completions:monaco.languages.CompletionList = await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, position, caretOffset);
+                return completions;
+            }
+        });
     }
 }
 
