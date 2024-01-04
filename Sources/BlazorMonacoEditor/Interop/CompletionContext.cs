@@ -2,14 +2,14 @@ using System.Text.Json.Serialization;
 
 namespace BlazorMonacoEditor.Interop;
 
-public sealed record CompletionContext
+public readonly record struct CompletionContext
 {
     /// <summary>
     /// How the completion was triggered.
     /// </summary>
     [JsonPropertyName("triggerKind")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public CompletionTriggerKind TriggerKind { get; set; }
+    public CompletionTriggerKind TriggerKind { get; init; }
 
     /// <summary>
     /// Character that triggered the completion item provider.
@@ -17,5 +17,5 @@ public sealed record CompletionContext
     /// </summary>
     [JsonPropertyName("triggerCharacter")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public string? TriggerCharacter { get; set; }
+    public string? TriggerCharacter { get; init; }
 }

@@ -1,8 +1,10 @@
-import { IEditorContext } from './IEditorContext';
-import { ITextModelContext } from './ITextModelContext';
-import { EditorEventHandler } from './EditorEventHandler';
-import { TextModelEventHandler } from './TextModelEventHandler';
-import { IBlazorInteropObject } from './IBlazorInteropObject';
+// noinspection JSUnusedGlobalSymbols
+
+import {IEditorContext} from './IEditorContext';
+import {ITextModelContext} from './ITextModelContext';
+import {EditorEventHandler} from './EditorEventHandler';
+import {TextModelEventHandler} from './TextModelEventHandler';
+import {IBlazorInteropObject} from './IBlazorInteropObject';
 import * as monaco from 'monaco-editor';
 import '../css/blazor.monaco.css';
 
@@ -40,6 +42,13 @@ class MonacoInterop {
             eventHandler: new EditorEventHandler(blazorCallback),
             eventSink: blazorCallback
         };
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (newEditor) {
+                newEditor.layout();
+            }
+        });
+        resizeObserver.observe(container);
 
         this.editors[editorId] = editorContext;
     }
@@ -167,8 +176,7 @@ class MonacoInterop {
             provideCompletionItems: async (model: monaco.editor.ITextModel, position: monaco.IPosition, completionContext: monaco.languages.CompletionContext) => {
                 console.info(`Completion request, model uri: ${model.uri}, position: ${position}`);
                 const caretOffset = model.getOffsetAt(position);
-                const completions:monaco.languages.CompletionList = await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, position, caretOffset);
-                return completions;
+                return await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, position, caretOffset);
             }
         });
     }

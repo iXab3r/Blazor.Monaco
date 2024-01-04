@@ -19,10 +19,10 @@ internal sealed class CompletionProviderFacade : IAsyncDisposable, ICompletionPr
     public DotNetObjectReference<CompletionProviderFacade> ObjectReference { get; }
 
     [JSInvokable]
-    public async Task<CompletionList> ProvideCompletionItems(MonacoUri modelUri, Position position, int caretOffset)
+    public async Task<CompletionList> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position position, int caretOffset)
     {
         Console.WriteLine($"Completion request: {modelUri.ToUri()}, position: {position}, caretOffset: {caretOffset}");
-        var result = await completionProvider.ProvideCompletionItems(modelUri, position, caretOffset);
+        var result = await completionProvider.ProvideCompletionItems(modelUri, completionContext, position, caretOffset);
         return result;
     }
 

@@ -11,6 +11,7 @@ using Microsoft.CodeAnalysis.Completion;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using ReactiveUI;
+using CompletionContext = BlazorMonacoEditor.Interop.CompletionContext;
 using CompletionItem = BlazorMonacoEditor.Interop.CompletionItem;
 using CompletionList = BlazorMonacoEditor.Interop.CompletionList;
 
@@ -83,7 +84,7 @@ public class IndexViewModel : ReactiveObject, ICompletionProvider
         }
     }
 
-    public async Task<CompletionList> ProvideCompletionItems(MonacoUri modelUri, Position caretPosition, int caretOffset)
+    public async Task<CompletionList> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position caretPosition, int caretOffset)
     {
         var completionService = Document.Project.Services.GetRequiredService<CompletionService>();
         var roslynCompletionList = await completionService.GetCompletionsAsync(Document, caretOffset);

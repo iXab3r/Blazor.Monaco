@@ -59,6 +59,9 @@
 
   [Parameter]
   public string? Theme { get; set; }
+  
+  [Parameter]
+  public int? LineNumbersMinChars { get; set; }
 
   [Parameter]
   public bool ShowLineNumbers
@@ -149,6 +152,7 @@
       var options = new EditorOptions()
       {
           LineNumbers = ShowLineNumbers ? "on" : "off",
+          LineNumbersMinChars = LineNumbersMinChars,
           Minimap = new EditorMinimapOptions()
           {
               Enabled = ShowCodeMap
