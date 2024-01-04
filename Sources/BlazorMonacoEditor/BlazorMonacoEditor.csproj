@@ -5,6 +5,8 @@
         <RazorLangVersion>3.0</RazorLangVersion>
         <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
         <Nullable>enable</Nullable>
+        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <EnableDefaultContentItems>true<!-- Important for Blazor Scoped CSS --></EnableDefaultContentItems>
     </PropertyGroup>
 
     <ItemGroup>
@@ -37,6 +39,12 @@
             <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         </Content>
     </ItemGroup>
+
+    <Target Name="NPMInstall" AfterTargets="PreBuildEvent">
+        <Message Importance="high" Text="Running NPM Install" />
+        <Exec Command="npm install"/>
+        <Message Importance="high" Text="Completed NPM Install" />
+    </Target>
 
     <Target Name="WebpackBuild" BeforeTargets="Build">
         <Exec Command="npm install"/>
