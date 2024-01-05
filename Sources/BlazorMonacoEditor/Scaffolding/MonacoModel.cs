@@ -12,7 +12,7 @@ internal sealed class MonacoModel : IAsyncDisposable
     }
 
     public DotNetObjectReference<MonacoModel> ObjectReference { get; }
-
+    
     public async ValueTask DisposeAsync()
     {
     }

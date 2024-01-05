@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Reactive.Disposables;
+using System.Reactive.Subjects;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 using Microsoft.JSInterop;
@@ -11,6 +13,7 @@ namespace BlazorMonacoEditor.Scaffolding
     internal sealed class TextModelFacade : IAsyncDisposable
     {
         private readonly MonacoInterop interop;
+        private readonly Subject<ModelContentChangedEventArgs> modelContentChangesSink = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="TextModelFacade"/> class.
@@ -26,6 +29,8 @@ namespace BlazorMonacoEditor.Scaffolding
             Text = initialText;
             ObjectReference = DotNetObjectReference.Create(this);
         }
+
+        public CompositeDisposable Anchors { get; } = new();
         
         public DotNetObjectReference<TextModelFacade> ObjectReference { get; }
 
@@ -49,17 +54,14 @@ namespace BlazorMonacoEditor.Scaffolding
         /// </summary>
         public string Text { get; private set; }
 
-        /// <summary>
-        /// Gets or sets the OnModelChanged event handler.
-        /// </summary>
-        public EventHandler<ModelContentChangedEventArgs> OnModelContentChanged { get; set; }
+        public IObservable<ModelContentChangedEventArgs> WhenModelContentChanged => modelContentChangesSink;
         
         [JSInvokable]
         public void HandleModelContentChanged(ModelContentChangedEventArgs args)
         {
-            OnModelContentChanged?.Invoke(this, args);
+            modelContentChangesSink.OnNext(args);
         }
-
+        
         /// <summary>
         /// Sets the content of the text model.
         /// </summary>
@@ -74,6 +76,11 @@ namespace BlazorMonacoEditor.Scaffolding
 
         public async ValueTask DisposeAsync()
         {
+            if (Anchors.IsDisposed)
+            {
+                return;
+            }
+            Anchors.Dispose();
             await interop.DisposeModel(this);
         }
     }

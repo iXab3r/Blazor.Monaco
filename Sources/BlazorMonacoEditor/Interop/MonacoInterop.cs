@@ -71,10 +71,10 @@ namespace BlazorMonacoEditor.Interop
             return textModel;
         }
         
-        public async ValueTask<IAsyncDisposable> RegisterCompletionProvider(string languageId, ICompletionProvider completionProvider)
+        public async ValueTask<IAsyncDisposable> RegisterCompletionProvider(ICompletionProvider completionProvider)
         {
             var completionProviderFacade = new CompletionProviderFacade(completionProvider);
-            await InvokeVoidAsync("registerCompletionProvider", languageId, completionProviderFacade.ObjectReference);
+            await InvokeVoidAsync("registerCompletionProvider", completionProviderFacade.ObjectReference);
             return completionProviderFacade;
         }
         

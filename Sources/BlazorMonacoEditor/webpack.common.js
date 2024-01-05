@@ -28,10 +28,7 @@ module.exports = {
     }, 
     {
       test: /\.ttf$/,
-      loader: 'file-loader',
-      options: {
-          publicPath: "/_content/Blazor.Monaco"
-      }
+      type: 'asset/resource',
     }]
   },
   plugins: [

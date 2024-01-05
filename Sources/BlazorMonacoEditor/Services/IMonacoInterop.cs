@@ -5,5 +5,5 @@ namespace BlazorMonacoEditor.Services;
 
 public interface IMonacoInterop
 {
-    ValueTask<IAsyncDisposable> RegisterCompletionProvider(string languageId, ICompletionProvider completionProvider);
+    ValueTask<IAsyncDisposable> RegisterCompletionProvider(ICompletionProvider completionProvider);
 }

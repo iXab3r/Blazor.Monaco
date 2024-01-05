@@ -7,6 +7,7 @@ import {TextModelEventHandler} from './TextModelEventHandler';
 import {IBlazorInteropObject} from './IBlazorInteropObject';
 import * as monaco from 'monaco-editor';
 import '../css/blazor.monaco.css';
+import * as logLevel from 'loglevel';
 
 // Initialise the Monaco Environment with the relative URL.
 // @ts-ignore
@@ -18,11 +19,21 @@ self.MonacoEnvironment = {
 
 class MonacoInterop {
 
-    private editors: { [id: string]: IEditorContext } = {};
-    private models: { [uri: string]: ITextModelContext } = {};
+    private static instance:MonacoInterop;
+    private readonly logger: logLevel.Logger = logLevel.getLogger(MonacoInterop.name);
+    
+    private readonly editors: { [id: string]: IEditorContext } = {};
+    private readonly models: { [uri: string]: ITextModelContext } = {};
     
     constructor()
     {
+        if (MonacoInterop.instance) {
+            return MonacoInterop.instance;
+        }
+
+        this.logger.enableAll();
+        MonacoInterop.instance = this;
+        this.logger.info(`MonacoInterop instance is being created`);
         monaco.editor.setTheme('vs-dark');
     }
 
@@ -33,6 +44,7 @@ class MonacoInterop {
      * @param blazorCallback An object on which to invoke event methods.
      */
     createEditor(editorId: string, container: HTMLElement, blazorCallback: IBlazorInteropObject) {
+        this.logger.debug(`Creating editor with Id ${editorId} inside ${container}, .net callback: ${blazorCallback}`);
         const newEditor = monaco.editor.create(container);
 
         const editorContext: IEditorContext = {
@@ -54,13 +66,14 @@ class MonacoInterop {
     }
     
     disposeEditor(editorId: string){
+        this.logger.debug(`Disposing editor ${editorId}`)
         const editorCtxt = this.getEditorById(editorId);
         this.editors[editorId] = null;
         editorCtxt.codeEditor.dispose();
     }
     
     updateEditorOptions(editorId: string, newOptions: monaco.editor.IEditorOptions & monaco.editor.IGlobalEditorOptions){
-        console.info(`Updating editor options: ${JSON.stringify(newOptions)}`);
+        this.logger.info(`Updating editor options: ${JSON.stringify(newOptions)}`);
         const editorCtxt = this.getEditorById(editorId);
         editorCtxt.codeEditor.updateOptions(newOptions);
     }
@@ -74,6 +87,8 @@ class MonacoInterop {
      */
     createTextModel(uri: string, value: string, blazorCallback: IBlazorInteropObject, language?: string)
     {
+        this.logger.debug(`Creating text model with Uri ${uri}, language: ${language}, .net callback: ${blazorCallback}`);
+        
         const monacoUri = monaco.Uri.parse(uri);
 
         const model = monaco.editor.createModel(value, language, monacoUri);
@@ -92,13 +107,17 @@ class MonacoInterop {
         });
 
         this.models[uri] = modelContext;
+        this.logger.debug(`Created text model with Uri ${uri}, Id: ${model.id}`);
     }
 
     disposeTextModel(textModelUri: string){
+        this.logger.debug(`Disposing text model with Uri ${textModelUri}`);
+        
         const modelCtxt = this.getTextModelByUri(textModelUri);
 
         this.models[textModelUri] = null;
         modelCtxt.textModel.dispose();
+        this.logger.debug(`Disposed text model with Uri ${textModelUri}, id: ${modelCtxt.textModel.id}`);
     }
 
     /**
@@ -171,13 +190,18 @@ class MonacoInterop {
         return editorCtxt;
     }
 
-    registerCompletionProvider(languageId: string, blazorCallback: IBlazorInteropObject) {
+    async registerCompletionProvider(blazorCallback: IBlazorInteropObject) {
+        logLevel.debug(`Registering new completion provider: ${blazorCallback}`);
+        const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
+        const triggerCharacters: string[] = await blazorCallback.invokeMethodAsync("GetTriggerCharacters");
+        logLevel.debug(`Completion provider language: ${languageId}, trigger characters: ${JSON.stringify(triggerCharacters)}`);
+        
         monaco.languages.registerCompletionItemProvider(languageId, {
             provideCompletionItems: async (model: monaco.editor.ITextModel, position: monaco.IPosition, completionContext: monaco.languages.CompletionContext) => {
-                console.info(`Completion request, model uri: ${model.uri}, position: ${position}`);
                 const caretOffset = model.getOffsetAt(position);
-                return await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, position, caretOffset);
-            }
+                return await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, completionContext, position, caretOffset);
+            },
+            triggerCharacters: triggerCharacters
         });
     }
 }

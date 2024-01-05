@@ -1,32 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Mime;
 using System.Threading;
 using System.Threading.Tasks;
-using BlazorMonacoEditor.Interop;
-using BlazorMonacoEditor.Services;
+using BlazorMonacoEditor.Roslyn.Scaffolding;
+using BlazorMonacoEditor.Roslyn.Services;
+using Microsoft.AspNetCore.Components;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Completion;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using ReactiveUI;
-using CompletionContext = BlazorMonacoEditor.Interop.CompletionContext;
-using CompletionItem = BlazorMonacoEditor.Interop.CompletionItem;
-using CompletionList = BlazorMonacoEditor.Interop.CompletionList;
 
 namespace BlazorMonacoEditor.Playground.Pages;
 
-public class IndexViewModel : ReactiveObject, ICompletionProvider
+public class IndexViewModel : ReactiveObject
 {
     private readonly AdhocWorkspace workspace;
+    private readonly List<DocumentId> documents = new();
 
     public IndexViewModel()
     {
         Theme = KnownThemes.First();
         LanguageId = KnownLanguages.First();
         workspace = new AdhocWorkspace();
-        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary);
+        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, usings: new[] {"System"});
         ProjectInfo = ProjectInfo.Create(ProjectId.CreateNewId(),
             VersionStamp.Default,
             "Test",
@@ -40,16 +37,22 @@ public class IndexViewModel : ReactiveObject, ICompletionProvider
                 MetadataReference.CreateFromFile(typeof(Task).Assembly.Location),
             }.Distinct());
         var project = workspace.AddProject(ProjectInfo);
-
-        DocumentId = DocumentId.CreateNewId(project.Id);
-        var scriptDocumentInfo = DocumentInfo.Create(DocumentId, "Script.csx", sourceCodeKind: SourceCodeKind.Script);
-        workspace.AddDocument(scriptDocumentInfo);
-        workspace.OpenDocument(DocumentId);
+        var newDocument = AddDocument();
+        DocumentId = newDocument.Id;
+        CompletionProvider.AddWorkspace(workspace);
     }
     
     public ProjectInfo ProjectInfo { get; }
     
-    public DocumentId DocumentId { get; }
+    public DocumentId DocumentId { get; set; }
+    
+    public string DocumentIdAsString
+    {
+        get => DocumentIdTypeConverter.Instance.ConvertToString(DocumentId);
+        set => DocumentId = (DocumentId)DocumentIdTypeConverter.Instance.ConvertFromString(value);
+    }
+
+    public IRoslynCompletionProvider CompletionProvider { get; } = new RoslynCompletionProvider();
     
     public bool IsVisible { get; set; } = true;
     
@@ -67,9 +70,12 @@ public class IndexViewModel : ReactiveObject, ICompletionProvider
     
     public ProjectId ProjectId => ProjectInfo.Id;
 
+    public IReadOnlyList<DocumentId> Documents => documents;
+
     public Document Document => workspace.CurrentSolution.GetDocument(DocumentId) ?? throw new ArgumentException($"Failed to find document by Id {DocumentId}"); 
     
-    public Project Project => workspace.CurrentSolution.GetProject(ProjectId) ?? throw new ArgumentException($"Failed to find project by Id {ProjectId}"); 
+    public Project Project => workspace.CurrentSolution.GetProject(ProjectId) ?? throw new ArgumentException($"Failed to find project by Id {ProjectId}");
+
 
     public SourceText SourceCode
     {
@@ -84,25 +90,12 @@ public class IndexViewModel : ReactiveObject, ICompletionProvider
         }
     }
 
-    public async Task<CompletionList> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position caretPosition, int caretOffset)
+    public Document AddDocument()
     {
-        var completionService = Document.Project.Services.GetRequiredService<CompletionService>();
-        var roslynCompletionList = await completionService.GetCompletionsAsync(Document, caretOffset);
-      
-        var monacoSuggestions = new List<CompletionItem>();
-        foreach (var roslynCompletion in roslynCompletionList.ItemsList)
-        {
-            var monacoCompletionItem = new CompletionItem()
-            {
-                Label = new CompletionItemLabel{ Label = roslynCompletion.DisplayText},
-            };
-            monacoSuggestions.Add(monacoCompletionItem);
-        }
-        var monacoCompletionList = new CompletionList()
-        {
-            Incomplete = false,
-            Suggestions = monacoSuggestions
-        };
-        return monacoCompletionList;
+        var newDocumentId = DocumentId.CreateNewId(ProjectId);
+        var scriptDocumentInfo = DocumentInfo.Create(newDocumentId, "Script.csx", sourceCodeKind: SourceCodeKind.Script);
+        var document = workspace.AddDocument(scriptDocumentInfo);
+        documents.Add(newDocumentId);
+        return document;
     }
 }

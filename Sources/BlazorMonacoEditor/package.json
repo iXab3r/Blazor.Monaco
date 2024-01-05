@@ -24,6 +24,7 @@
     "webpack-merge": "^4.2.2"
   },
   "dependencies": {
+    "loglevel": "^1.8.1",
     "monaco-editor": "^0.45.0"
   }
 }

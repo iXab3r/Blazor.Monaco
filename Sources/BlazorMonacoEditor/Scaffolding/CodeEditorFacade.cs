@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reactive.Disposables;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 
@@ -23,10 +24,24 @@ namespace BlazorMonacoEditor.Scaffolding
             this.interop = interop;
         }
 
+        public CompositeDisposable Anchors { get; } = new();
+
         /// <summary>
         /// Gets the generated id of the editor.
         /// </summary>
         public string Id { get; }
+        
+        public EditorOptions? Options { get; private set; }
+        
+        public async ValueTask UpdateOptions(EditorOptions options)
+        {
+            if (options == Options)
+            {
+                return;
+            }
+            await interop.UpdateOptions(this, options);
+            Options = options;
+        }
 
         /// <summary>
         /// Changes the model being displayed in the editor
@@ -46,6 +61,10 @@ namespace BlazorMonacoEditor.Scaffolding
 
         public async ValueTask DisposeAsync()
         {
+            if (Anchors.IsDisposed)
+            {
+                return;
+            }
             await interop.DisposeEditor(this);
         }
     }

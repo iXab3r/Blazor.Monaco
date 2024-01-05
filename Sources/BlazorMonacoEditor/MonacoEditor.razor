@@ -3,6 +3,9 @@
 @using Microsoft.CodeAnalysis.Text
 @using System.Reactive.Subjects
 @using System.Reactive.Disposables
+@using System.Reactive
+@using System.Reactive.Linq
+@using System.Threading
 @inject MonacoInterop MonacoInterop
 @inject ILogger<MonacoEditor> Logger
 @implements IAsyncDisposable
@@ -10,179 +13,225 @@
 <div @ref="monacoContainer" class="monaco-editor-container"></div>
 
 @code {
-  private ElementReference monacoContainer;
-  private CodeEditorFacade? editor;
-  private TextModelFacade? currentTextModel;
-  private SourceText sourceText = SourceText.From(string.Empty);
-  private string languageId = string.Empty;
+    private readonly MonacoRoslynAdapter roslynAdapter = new();
+    private readonly Subject<string> updateEditorSink = new();
 
-  private readonly MonacoRoslynAdapter roslynAdapter = new();
-  private readonly Subject<ModelContentChangedEventArgs> modelContentChangesSink = new();
-  private readonly CompositeDisposable anchors = new();
-  private bool showLineNumbers;
-  private bool showCodeMap;
+    private bool showLineNumbers;
+    private bool showCodeMap;
+    private ElementReference monacoContainer;
+    private CodeEditorFacade? editor;
+    private TextModelFacade? currentTextModel;
+    private SourceText sourceText = SourceText.From(string.Empty);
+    private string languageId = string.Empty;
 
-  [Parameter]
-  public SourceText Text
-  {
-      get => sourceText;
-      set
-      {
-          if (ReferenceEquals(sourceText, value) || sourceText.ContentEquals(value))
-          {
-              return;
-          }
+    public CompositeDisposable Anchors { get; } = new();
 
-          sourceText = value;
-          TextChanged.InvokeAsync(value);
-      }
-  }
-  
-  [Parameter] public EventCallback<SourceText> TextChanged { get; set; }
+    [Parameter] public string? Path { get; set; }
 
-  [Parameter]
-  public string LanguageId
-  {
-      get => languageId;
-      set
-      {
-          if (string.Equals(languageId, value))
-          {
-              return;
-          }
-          languageId = value;
-          LanguageIdChanged.InvokeAsync(value);
-      }
-  }
-  
-  [Parameter] public EventCallback<string> LanguageIdChanged { get; set; }
+    [Parameter]
+    public SourceText SourceText
+    {
+        get => sourceText;
+        set
+        {
+            if (TextChanged.HasDelegate && SourceTextChanged.HasDelegate)
+            {
+                throw new InvalidOperationException($"Invalid configuration - only one of {nameof(TextChanged)} or {nameof(SourceTextChanged)} must be subscribed to");
+            }
 
-  [Parameter]
-  public string? Theme { get; set; }
-  
-  [Parameter]
-  public int? LineNumbersMinChars { get; set; }
+            if (ReferenceEquals(sourceText, value) || sourceText.ContentEquals(value))
+            {
+                return;
+            }
 
-  [Parameter]
-  public bool ShowLineNumbers
-  {
-      get => showLineNumbers;
-      set
-      {
-          if (showLineNumbers == value)
-          {
-              return;
-          }
-          showLineNumbers = value;
-          ShowLineNumbersChanged.InvokeAsync(value);
-      }
-  }
+            sourceText = value;
+            SourceTextChanged.InvokeAsync(value);
+            if (TextChanged.HasDelegate)
+            {
+                TextChanged.InvokeAsync(value.ToString());
+            }
+        }
+    }
 
-  [Parameter] public EventCallback<bool> ShowLineNumbersChanged { get; set; }
-  
-  [Parameter]
-  public bool ShowCodeMap
-  {
-      get => showCodeMap;
-      set
-      {
-          if (showCodeMap == value)
-          {
-              return;
-          }
-          showCodeMap = value;
-          ShowCodeMapChanged.InvokeAsync(value);
-      }
-  }
+    [Parameter] public EventCallback<SourceText> SourceTextChanged { get; set; }
 
-  [Parameter] public EventCallback<bool> ShowCodeMapChanged { get; set; }
+    [Parameter]
+    public string Text
+    {
+        get => sourceText.ToString();
+        set
+        {
+            if (TextChanged.HasDelegate && SourceTextChanged.HasDelegate)
+            {
+                throw new InvalidOperationException($"Invalid configuration - only one of {nameof(TextChanged)} or {nameof(SourceTextChanged)} must be subscribed to");
+            }
 
-  protected override async Task OnAfterRenderAsync(bool firstRender)
-  {
-      if (firstRender)
-      {
-          Logger.LogDebug("First Render");
+            var valueAsSourceText = SourceText.From(value ?? string.Empty);
+            if (valueAsSourceText.ContentEquals(sourceText))
+            {
+                return;
+            }
 
-          editor = await MonacoInterop.CreateEditor(monacoContainer);
-          Logger.LogDebug("Editor Created");
-          await UpdateOptions();
+            SourceText = valueAsSourceText;
+        }
+    }
 
-          currentTextModel = await MonacoInterop.CreateTextModel(new Uri($"inmemory://{editor.Id}/file"), string.Empty, LanguageId);
+    [Parameter] public EventCallback<string> TextChanged { get; set; }
 
-          Logger.LogDebug($"Created model: {currentTextModel}");
-          await editor.SetModel(currentTextModel);
-      
-          var content = sourceText.ToString();
-          await currentTextModel.SetContent(content);
-          
-          currentTextModel.OnModelContentChanged += OnModelContentChanged;
+    [Parameter]
+    public string LanguageId
+    {
+        get => languageId;
+        set
+        {
+            if (string.Equals(languageId, value))
+            {
+                return;
+            }
 
-          anchors.Add(modelContentChangesSink
-              .Subscribe(x =>
-              {
-                  var currentText = Text;
-                  var updatedText = roslynAdapter.ApplyChanges(currentText, x);
-                  Text = updatedText;
-              }));
-          
-      }
-  }
+            languageId = value;
+            LanguageIdChanged.InvokeAsync(value);
+        }
+    }
 
-  protected override async Task OnInitializedAsync()
-  {
-      await base.OnInitializedAsync();
-  }
+    [Parameter] public EventCallback<string> LanguageIdChanged { get; set; }
 
-  protected override async Task OnParametersSetAsync()
-  {
-      await base.OnParametersSetAsync();
+    [Parameter] public string? Theme { get; set; }
 
-      if (editor != null)
-      {
-          await UpdateOptions();
-      }
-  }
+    [Parameter] public int? LineNumbersMinChars { get; set; }
 
-  private async Task UpdateOptions()
-  {
-      if (editor == null)
-      {
-          throw new InvalidOperationException("Editor is not loaded yet");
-      }
-      var options = new EditorOptions()
-      {
-          LineNumbers = ShowLineNumbers ? "on" : "off",
-          LineNumbersMinChars = LineNumbersMinChars,
-          Minimap = new EditorMinimapOptions()
-          {
-              Enabled = ShowCodeMap
-          }
-      };
-      await MonacoInterop.UpdateOptions(editor, options);
-  }
+    [Parameter]
+    public bool ShowLineNumbers
+    {
+        get => showLineNumbers;
+        set
+        {
+            if (showLineNumbers == value)
+            {
+                return;
+            }
 
-  public override async Task SetParametersAsync(ParameterView parameters)
-  {
-      await base.SetParametersAsync(parameters);
-  }
+            showLineNumbers = value;
+            ShowLineNumbersChanged.InvokeAsync(value);
+        }
+    }
 
-  private void OnModelContentChanged(object? sender, ModelContentChangedEventArgs e)
-  {
-      modelContentChangesSink.OnNext(e);
-  }
+    [Parameter] public EventCallback<bool> ShowLineNumbersChanged { get; set; }
 
-  public async ValueTask DisposeAsync()
-  {
-      anchors.Dispose();
-      
-      if (editor != null)
-      {
-          await editor.DisposeAsync();
-      }
+    [Parameter]
+    public bool ShowCodeMap
+    {
+        get => showCodeMap;
+        set
+        {
+            if (showCodeMap == value)
+            {
+                return;
+            }
 
-      if (currentTextModel != null)
-      {
-          await currentTextModel.DisposeAsync();
-      }
-  }
+            showCodeMap = value;
+            ShowCodeMapChanged.InvokeAsync(value);
+        }
+    }
+
+    [Parameter] public EventCallback<bool> ShowCodeMapChanged { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Logger.LogDebug("First Render");
+
+            editor = await MonacoInterop.CreateEditor(monacoContainer);
+            Logger.LogDebug("Editor Created");
+            var editorSubscription = updateEditorSink
+                .Select(reason => Observable.FromAsync(token => UpdateEditor(reason, token)).Take(1)).Concat()
+                .Subscribe();
+            Anchors.Add(editorSubscription);
+            updateEditorSink.OnNext("OnAfterRenderAsync");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await base.OnParametersSetAsync();
+        updateEditorSink.OnNext("OnParametersSetAsync");
+    }
+
+    private async Task UpdateEditor(string reason, CancellationToken cancellationToken)
+    {
+        if (editor == null)
+        {
+            return;
+        }
+        
+        var modelUri = new Uri($"inmemory://{editor.Id}/{Path}");
+        if (currentTextModel == null || currentTextModel.Uri != modelUri)
+        {
+            if (currentTextModel != null)
+            {
+                await currentTextModel.DisposeAsync();
+            }
+
+            currentTextModel = await MonacoInterop.CreateTextModel(modelUri, string.Empty, LanguageId);
+            Logger.LogDebug($"Created model: {currentTextModel}");
+            await editor.SetModel(currentTextModel);
+            await currentTextModel.SetContent(sourceText.ToString());
+
+            var modelSubscription = currentTextModel
+                .WhenModelContentChanged
+                .Subscribe(x =>
+                {
+                    var currentText = SourceText;
+                    var updatedText = roslynAdapter.ApplyChanges(currentText, x);
+                    SourceText = updatedText;
+                });
+            currentTextModel.Anchors.Add(modelSubscription);
+        }
+        
+        await UpdateOptionsIfNeeded();
+    }
+
+    private async Task UpdateOptionsIfNeeded()
+    {
+        if (editor == null)
+        {
+            throw new InvalidOperationException("Editor is not loaded yet");
+        }
+
+        var options = new EditorOptions()
+        {
+            LineNumbers = ShowLineNumbers ? "on" : "off",
+            LineNumbersMinChars = LineNumbersMinChars,
+            Minimap = new EditorMinimapOptions()
+            {
+                Enabled = ShowCodeMap
+            }
+        };
+        await editor.UpdateOptions(options);
+    }
+
+    public override async Task SetParametersAsync(ParameterView parameters)
+    {
+        await base.SetParametersAsync(parameters);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Anchors.Dispose();
+        if (editor != null)
+        {
+            await editor.DisposeAsync();
+        }
+
+        if (currentTextModel != null)
+        {
+            await currentTextModel.DisposeAsync();
+        }
+    }
 }

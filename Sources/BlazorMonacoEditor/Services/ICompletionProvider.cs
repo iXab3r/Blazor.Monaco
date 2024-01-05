@@ -5,5 +5,9 @@ namespace BlazorMonacoEditor.Services;
 
 public interface ICompletionProvider
 {
-    Task<CompletionList> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position caretPosition, int caretOffset);
+    Task<string[]> GetTriggerCharacters();
+
+    Task<string> GetLanguage();
+    
+    Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position caretPosition, int caretOffset);
 }

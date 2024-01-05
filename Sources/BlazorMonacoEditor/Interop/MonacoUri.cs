@@ -44,8 +44,12 @@ public sealed record MonacoUri
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public string? Fragment { get; init; }
 
-    public Uri ToUri()
+    public Uri? ToUriOrDefault()
     {
+        if (string.IsNullOrEmpty(Scheme) || string.IsNullOrEmpty(Authority) || string.IsNullOrEmpty(Path))
+        {
+            return default;
+        }
         return new Uri($"{Scheme}://{Authority}{Path}");
     }
 }
