@@ -18,8 +18,9 @@ public class IndexViewModel : ReactiveObject
     private readonly AdhocWorkspace workspace;
     private readonly List<DocumentId> documents = new();
 
-    public IndexViewModel()
+    public IndexViewModel(IRoslynCompletionProviderController roslynCompletionProviderController)
     {
+        RoslynCompletionProviderController = roslynCompletionProviderController;
         Theme = KnownThemes.First();
         LanguageId = KnownLanguages.First();
         workspace = new AdhocWorkspace();
@@ -39,9 +40,10 @@ public class IndexViewModel : ReactiveObject
         var project = workspace.AddProject(ProjectInfo);
         var newDocument = AddDocument();
         DocumentId = newDocument.Id;
-        CompletionProvider.AddWorkspace(workspace);
+        RoslynCompletionProviderController.CompletionProvider.AddWorkspace(workspace);
     }
-    
+    public IRoslynCompletionProviderController RoslynCompletionProviderController { get; }
+
     public ProjectInfo ProjectInfo { get; }
     
     public DocumentId DocumentId { get; set; }
@@ -52,8 +54,6 @@ public class IndexViewModel : ReactiveObject
         set => DocumentId = (DocumentId)DocumentIdTypeConverter.Instance.ConvertFromString(value);
     }
 
-    public IRoslynCompletionProvider CompletionProvider { get; } = new RoslynCompletionProvider();
-    
     public bool IsVisible { get; set; } = true;
     
     public bool ShowLineNumbers { get; set; } = true;
@@ -75,7 +75,6 @@ public class IndexViewModel : ReactiveObject
     public Document Document => workspace.CurrentSolution.GetDocument(DocumentId) ?? throw new ArgumentException($"Failed to find document by Id {DocumentId}"); 
     
     public Project Project => workspace.CurrentSolution.GetProject(ProjectId) ?? throw new ArgumentException($"Failed to find project by Id {ProjectId}");
-
 
     public SourceText SourceCode
     {

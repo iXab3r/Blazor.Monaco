@@ -11,11 +11,13 @@ namespace BlazorMonacoEditor.Roslyn
         /// <summary>
         /// Add services for the Monaco component.
         /// </summary>
-        public static IServiceCollection AddMonacoRoslynCompletionProvider(this IServiceCollection services)
+        public static IServiceCollection AddMonacoRoslyn(this IServiceCollection services)
         {
             services.AddSingleton<RoslynCompletionProvider>();
-            services.AddSingleton<IRoslynCompletionProvider>(provider => provider.GetService<RoslynCompletionProvider>()!);
-
+            services.AddSingleton<IRoslynCompletionProvider>(provider => provider.GetRequiredService<RoslynCompletionProvider>()!);
+            
+            services.AddScoped<RoslynCompletionProviderController>();
+            services.AddScoped<IRoslynCompletionProviderController>(provider => provider.GetRequiredService<RoslynCompletionProviderController>());
             return services;
         }
     }

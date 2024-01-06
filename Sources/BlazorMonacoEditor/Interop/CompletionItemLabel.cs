@@ -8,7 +8,7 @@ public class CompletionItemLabel
     /// The label of the completion item.
     /// </summary>
     [JsonPropertyName("label")]
-    public string Label { get; set; }
+    public string? Label { get; set; }
 
     /// <summary>
     /// Detail information about the completion item.

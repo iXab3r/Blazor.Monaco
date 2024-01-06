@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -19,4 +20,10 @@ public sealed record CompletionList
     [JsonPropertyName("incomplete")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool? Incomplete { get; set; }
+
+    public static readonly CompletionList Empty = new()
+    {
+        Incomplete = false,
+        Suggestions = ArraySegment<CompletionItem>.Empty
+    };
 }

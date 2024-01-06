@@ -18,7 +18,7 @@ public sealed record CompletionItem
     /// </summary>
     [JsonPropertyName("kind")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public CompletionItemKind Kind { get; set; }
+    public CompletionItemKind? Kind { get; set; }
 
     /// <summary>
     /// A modifier to the `kind` which affect how the item is rendered, e.g. Deprecated is rendered with a strikeout.

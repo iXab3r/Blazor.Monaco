@@ -35,11 +35,6 @@
             <button id="addDocument" onclick="@(async () => { DataContext.DocumentId = DataContext.AddDocument().Id; })">Add</button>
         </div>
 
-
-        <div class="input-group">
-            <button id="addCompletionProvider" onclick="@(async () => { await MonacoInterop.RegisterCompletionProvider(DataContext.CompletionProvider); })">Register CompletionProvider</button>
-        </div>
-
         <select @bind="@DataContext.Theme"
                 class="form-control flex-shrink-1">
             @foreach (var theme in DataContext.KnownThemes)
@@ -74,4 +69,19 @@
                   Path="@(DataContext.DocumentId != null ? $"{DataContext.DocumentId.ProjectId.Id}/{DataContext.DocumentId.Id}" : null)"
                   ShowLineNumbers="@DataContext.ShowLineNumbers"
                   ShowCodeMap="@DataContext.ShowCodeMap"/>
+}
+
+@code{
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (firstRender)
+        {
+            await DataContext.RoslynCompletionProviderController.Register();
+        }
+    }
+
 }

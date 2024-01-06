@@ -18,7 +18,7 @@ void ConfigureServices(IServiceCollection services)
     services.AddRazorPages();
     services.AddServerSideBlazor().AddCircuitOptions(options => options.DetailedErrors = true);
     services.AddMonaco();
-    services.AddMonacoRoslynCompletionProvider();
+    services.AddMonacoRoslyn();
     services.AddScoped<IndexViewModel>();
 }
 

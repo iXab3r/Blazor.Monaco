@@ -31,11 +31,16 @@ public sealed class DocumentIdTypeConverter : TypeConverter
         return false;
     }
 
-    public override object ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture, object? value, Type destinationType)
+    public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture, object? value, Type destinationType)
     {
         if (!CanConvertTo(context, destinationType))
         {
             throw new NotSupportedException($"Conversion from {typeof(DocumentId)} to {destinationType} is not supported");
+        }
+
+        if (value == null)
+        {
+            return null;
         }
 
         if (value is not DocumentId documentId)
@@ -46,8 +51,13 @@ public sealed class DocumentIdTypeConverter : TypeConverter
         return $"{documentId.ProjectId.Id}/{documentId.Id}";
     }
 
-    public override object ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
+    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object? value)
     {
+        if (value == null)
+        {
+            return null;
+        }
+        
         if (!CanConvertFrom(context, value.GetType()))
         {
             throw new NotSupportedException($"Conversion from {typeof(DocumentId)} to {value.GetType()} is not supported");
@@ -65,7 +75,7 @@ public sealed class DocumentIdTypeConverter : TypeConverter
 
         return documentId;
     }
-
+    
     public static bool TryConvert(string documentIdString, out DocumentId? documentId)
     {
         if (string.IsNullOrEmpty(documentIdString))

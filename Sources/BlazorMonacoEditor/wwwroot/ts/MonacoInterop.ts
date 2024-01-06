@@ -1,4 +1,4 @@
-// noinspection JSUnusedGlobalSymbols
+// noinspection JSUnusedGlobalSymbols,UnnecessaryLocalVariableJS
 
 import {IEditorContext} from './IEditorContext';
 import {ITextModelContext} from './ITextModelContext';
@@ -31,7 +31,7 @@ class MonacoInterop {
             return MonacoInterop.instance;
         }
 
-        this.logger.enableAll();
+        this.logger.setLevel(logLevel.levels.TRACE);
         MonacoInterop.instance = this;
         this.logger.info(`MonacoInterop instance is being created`);
         monaco.editor.setTheme('vs-dark');
@@ -191,15 +191,22 @@ class MonacoInterop {
     }
 
     async registerCompletionProvider(blazorCallback: IBlazorInteropObject) {
-        logLevel.debug(`Registering new completion provider: ${blazorCallback}`);
+        this.logger.debug(`Registering new completion provider: ${blazorCallback}`);
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         const triggerCharacters: string[] = await blazorCallback.invokeMethodAsync("GetTriggerCharacters");
-        logLevel.debug(`Completion provider language: ${languageId}, trigger characters: ${JSON.stringify(triggerCharacters)}`);
+        this.logger.debug(`Completion provider language: ${languageId}, trigger characters: ${JSON.stringify(triggerCharacters)}`);
         
         monaco.languages.registerCompletionItemProvider(languageId, {
             provideCompletionItems: async (model: monaco.editor.ITextModel, position: monaco.IPosition, completionContext: monaco.languages.CompletionContext) => {
                 const caretOffset = model.getOffsetAt(position);
-                return await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, completionContext, position, caretOffset);
+                this.logger.trace(`Completion request: ${model.uri}, context: ${completionContext}, position: ${position}, caretOffset: ${caretOffset}`);
+                const completionList: monaco.languages.CompletionList = await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, completionContext, position, caretOffset);
+                this.logger.trace(`Completion list received: ${completionList.suggestions.length}`);
+                return completionList;
+            },
+            resolveCompletionItem: async (item: monaco.languages.CompletionItem): Promise<monaco.languages.CompletionItem> => {
+                const completionItem: monaco.languages.CompletionItem  = await blazorCallback.invokeMethodAsync("ResolveCompletionItem", item);
+                return completionItem;
             },
             triggerCharacters: triggerCharacters
         });

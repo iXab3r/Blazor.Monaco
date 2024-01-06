@@ -21,15 +21,32 @@
     private ElementReference monacoContainer;
     private CodeEditorFacade? editor;
     private TextModelFacade? currentTextModel;
-    private SourceText sourceText = SourceText.From(string.Empty);
+    private SourceText? sourceText;
+    private string? path;
     private string languageId = string.Empty;
 
     public CompositeDisposable Anchors { get; } = new();
 
-    [Parameter] public string? Path { get; set; }
+    [Parameter]
+    public string? Path
+    {
+        get => path;
+        set
+        {
+            if (string.Equals(path, value))
+            {
+                return;
+            }
+
+            path = value;
+            PathChanged.InvokeAsync(value);
+        }
+    }
+
+    [Parameter] public EventCallback<string?> PathChanged { get; set; }
 
     [Parameter]
-    public SourceText SourceText
+    public SourceText? SourceText
     {
         get => sourceText;
         set
@@ -39,7 +56,12 @@
                 throw new InvalidOperationException($"Invalid configuration - only one of {nameof(TextChanged)} or {nameof(SourceTextChanged)} must be subscribed to");
             }
 
-            if (ReferenceEquals(sourceText, value) || sourceText.ContentEquals(value))
+            if (ReferenceEquals(sourceText, value))
+            {
+                return;
+            }
+            
+            if (value != null && sourceText != null && value.ContentEquals(sourceText))
             {
                 return;
             }
@@ -48,7 +70,7 @@
             SourceTextChanged.InvokeAsync(value);
             if (TextChanged.HasDelegate)
             {
-                TextChanged.InvokeAsync(value.ToString());
+                TextChanged.InvokeAsync(value?.ToString());
             }
         }
     }
@@ -56,9 +78,9 @@
     [Parameter] public EventCallback<SourceText> SourceTextChanged { get; set; }
 
     [Parameter]
-    public string Text
+    public string? Text
     {
-        get => sourceText.ToString();
+        get => sourceText?.ToString();
         set
         {
             if (TextChanged.HasDelegate && SourceTextChanged.HasDelegate)
@@ -66,8 +88,8 @@
                 throw new InvalidOperationException($"Invalid configuration - only one of {nameof(TextChanged)} or {nameof(SourceTextChanged)} must be subscribed to");
             }
 
-            var valueAsSourceText = SourceText.From(value ?? string.Empty);
-            if (valueAsSourceText.ContentEquals(sourceText))
+            var valueAsSourceText = value != null ? SourceText.From(value) : null;
+            if (valueAsSourceText != null && sourceText != null && valueAsSourceText.ContentEquals(sourceText))
             {
                 return;
             }
@@ -181,13 +203,13 @@
             currentTextModel = await MonacoInterop.CreateTextModel(modelUri, string.Empty, LanguageId);
             Logger.LogDebug($"Created model: {currentTextModel}");
             await editor.SetModel(currentTextModel);
-            await currentTextModel.SetContent(sourceText.ToString());
+            await currentTextModel.SetContent(sourceText?.ToString() ?? string.Empty);
 
             var modelSubscription = currentTextModel
                 .WhenModelContentChanged
                 .Subscribe(x =>
                 {
-                    var currentText = SourceText;
+                    var currentText = SourceText ?? SourceText.From(string.Empty);
                     var updatedText = roslynAdapter.ApplyChanges(currentText, x);
                     SourceText = updatedText;
                 });

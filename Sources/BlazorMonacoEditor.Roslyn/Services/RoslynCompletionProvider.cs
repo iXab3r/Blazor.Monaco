@@ -5,29 +5,37 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Text;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
+using BlazorMonacoEditor.Roslyn.Scaffolding;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.Completion;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using CompletionContext = BlazorMonacoEditor.Interop.CompletionContext;
 using CompletionItem = BlazorMonacoEditor.Interop.CompletionItem;
 using CompletionList = BlazorMonacoEditor.Interop.CompletionList;
 using RoslynCompletionItem = Microsoft.CodeAnalysis.Completion.CompletionItem;
+using RoslynCompletionList = Microsoft.CodeAnalysis.Completion.CompletionList;
 
 namespace BlazorMonacoEditor.Roslyn.Services;
 
 public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
 {
+    private readonly ILogger log;
     private readonly IMemoryCache documentsByUri;
     private readonly ConcurrentDictionary<Workspace, int> workspaces = new();
+    private long completionRevision;
 
-    public RoslynCompletionProvider()
+    public RoslynCompletionProvider(ILoggerFactory logFactory)
     {
+        log = logFactory.CreateLogger<RoslynCompletionProvider>();
         documentsByUri = new MemoryCache(new MemoryCacheOptions());
     }
-
+    
     public async Task<string[]> GetTriggerCharacters()
     {
         return new[] {"."};
@@ -37,13 +45,14 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
     {
         return "csharp";
     }
-    
+
     public IDisposable AddWorkspace(Workspace workspace)
     {
         lock (workspaces)
         {
             workspaces.AddOrUpdate(workspace, _ => 1, (_, existingReferences) => existingReferences + 1);
         }
+
         return Disposable.Create(() =>
         {
             lock (workspaces)
@@ -69,18 +78,10 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
             return documentCacheEntry;
         }
 
-        if (!Guid.TryParse(documentUri.Segments[1].Trim('/', '\\'), out var projectGuid))
+        if (!DocumentIdTypeConverter.TryConvert(documentUri.AbsolutePath, out var documentId) || documentId == null)
         {
             return null;
         }
-
-        if (!Guid.TryParse(documentUri.Segments[2].Trim('/', '\\'), out var documentGuid))
-        {
-            return null;
-        }
-
-        var projectId = ProjectId.CreateFromSerialized(projectGuid);
-        var documentId = DocumentId.CreateFromSerialized(projectId, documentGuid);
 
         // ReSharper disable once InconsistentlySynchronizedField expected
         foreach (var workspace in workspaces.Keys)
@@ -92,7 +93,7 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
             }
 
             var completionService = workspaceDocument.Project.Services.GetRequiredService<CompletionService>();
-            var result = new DocumentCacheEntry(workspace, documentId, CompletionService: completionService);
+            var result = new DocumentCacheEntry(workspace, documentId, documentUri, CompletionService: completionService);
             documentsByUri.Set(documentUri, result, new MemoryCacheEntryOptions()
             {
                 SlidingExpiration = TimeSpan.FromMinutes(5)
@@ -105,37 +106,67 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
 
     public async Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position caretPosition, int caretOffset)
     {
-        var entry = FindEntryByUri(modelUri.ToUriOrDefault());
+        var revision = Interlocked.Increment(ref completionRevision);
+        var documentUri = modelUri.ToUriOrDefault();
+        if (documentUri == null)
+        {
+            return CompletionList.Empty;
+        }
+
+        var entry = FindEntryByUri(documentUri);
         if (entry == null)
         {
-            return null;
+            return CompletionList.Empty;
         }
 
         var document = entry.Workspace.CurrentSolution.GetDocument(entry.DocumentId);
         if (document == null)
         {
-            return null;
+            return CompletionList.Empty;
         }
 
-        var roslynCompletionList = await entry.CompletionService.GetCompletionsAsync(document, caretOffset).ConfigureAwait(false);
+        var completionService = entry.CompletionService;
+
+        RoslynCompletionList roslynCompletionList;
+        try
+        {
+            roslynCompletionList = await completionService.GetCompletionsAsync(document, caretOffset).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            log.LogError(e, "Failed to build completion list");
+            return CompletionList.Empty;
+        }
+        documentsByUri.Set(documentUri, entry with {CompletionList = roslynCompletionList, CompletionListRevision = revision}, new MemoryCacheEntryOptions()
+        {
+            SlidingExpiration = TimeSpan.FromMinutes(5)
+        });
+
         var orderedRoslynCompletions = roslynCompletionList.ItemsList
-            .Where(roslynCompletion => roslynCompletion is not {IsComplexTextEdit: true, InlineDescription.Length: > 0})
-            .OrderByDescending(x => x.Rules.MatchPriority)
-            .ThenBy(x => x.SortText);
+            .Select((x, idx) => new {CompletionItem = x, Idx = idx})
+            .Where(roslynCompletion => roslynCompletion.CompletionItem is not {IsComplexTextEdit: true, InlineDescription.Length: > 0})
+            .OrderByDescending(x => x.CompletionItem.Rules.MatchPriority);
 
         var monacoSuggestions = new List<CompletionItem>();
-        foreach (var roslynCompletion in orderedRoslynCompletions)
+        foreach (var kvp in orderedRoslynCompletions)
         {
-            var insertText = roslynCompletion.Properties.TryGetValue("InsertionText", out var text) ? text : roslynCompletion.DisplayText;
+            var insertText = kvp.CompletionItem.Properties.TryGetValue("InsertionText", out var text) ? text : kvp.CompletionItem.DisplayText;
+            var documentationLink = new RoslynCompletionItemLink(documentUri.ToString(), revision, kvp.Idx);
             var monacoCompletionItem = new CompletionItem()
             {
                 Label = new CompletionItemLabel
                 {
-                    Label = roslynCompletion.DisplayText,
+                    Label = kvp.CompletionItem.DisplayText,
+                    Description = string.Join(" ", kvp.CompletionItem.Tags)
                 },
                 InsertText = insertText,
-                Kind = CompletionItemKind.Interface
+                Kind = ConvertTextTagToCompletionItemKind(kvp.CompletionItem.Tags),
+                Documentation = new MarkdownString()
+                {
+                    Value = documentationLink.Serialize(),
+                }
             };
+
             monacoSuggestions.Add(monacoCompletionItem);
         }
 
@@ -145,6 +176,58 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
             Suggestions = monacoSuggestions
         };
         return monacoCompletionList;
+    }
+
+    public async Task<CompletionItem> ResolveCompletionItem(CompletionItem item)
+    {
+        var serializedLink = item.Documentation?.Value;
+        if (string.IsNullOrEmpty(serializedLink))
+        {
+            return item;
+        }
+
+        if (!RoslynCompletionItemLink.TryDeserialize(serializedLink, out var itemLink) || itemLink == null)
+        {
+            return item;
+        }
+
+        if (!Uri.TryCreate(itemLink.DocumentUri, UriKind.RelativeOrAbsolute, out var documentUri))
+        {
+            return item;
+        }
+
+        var entry = FindEntryByUri(documentUri);
+        if (entry == null)
+        {
+            return item;
+        }
+        
+        var document = entry.Workspace.CurrentSolution.GetDocument(entry.DocumentId);
+        if (document == null)
+        {
+            return item;
+        }
+        
+        if (entry.CompletionList == null || entry.CompletionListRevision != itemLink.ListVersion)
+        {
+            return item;
+        }
+
+        var completionItem = entry.CompletionList.ItemsList[itemLink.ItemIdx];
+        var documentation = BuildDocumentation(completionItem);
+
+        CompletionDescription? description;
+        try
+        {
+            description = await entry.CompletionService.GetDescriptionAsync(document, completionItem);
+        }
+        catch (Exception e)
+        {
+            log.LogError(e, $"Failed to build description for item {item}");
+            return item;
+        }
+        
+        return item with {  Documentation = new MarkdownString { Value = $"{documentation}<br>{description?.Text ?? "No documentation"}" }};
     }
 
     private static string BuildDocumentation(RoslynCompletionItem roslynCompletion)
@@ -170,6 +253,7 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
         {
             documentationBuilder.AppendLine($"{nameof(roslynCompletion.InlineDescription)}: {roslynCompletion.InlineDescription}");
         }
+
         if (roslynCompletion.Rules.MatchPriority != default)
         {
             documentationBuilder.AppendLine($"{nameof(roslynCompletion.Rules.MatchPriority)}: {roslynCompletion.Rules.MatchPriority}");
@@ -240,6 +324,48 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
         };
     }
 
+    public static CompletionItemKind ConvertTextTagToCompletionItemKind(IEnumerable<string> tags)
+    {
+        foreach (var tag in tags)
+        {
+            var kind = ConvertTextTagToCompletionItemKind(tag);
+            if (kind != null)
+            {
+                return kind.Value;
+            }
+        }
+
+        return CompletionItemKind.Text;
+    }
+    
+    public static CompletionItemKind? ConvertTextTagToCompletionItemKind(string textTag)
+    {
+        return textTag switch
+        {
+            TextTags.Class => CompletionItemKind.Class,
+            TextTags.Delegate => CompletionItemKind.Function,
+            TextTags.Enum => CompletionItemKind.Enum,
+            TextTags.Event => CompletionItemKind.Event,
+            TextTags.Field => CompletionItemKind.Field,
+            TextTags.Interface => CompletionItemKind.Interface,
+            TextTags.Keyword => CompletionItemKind.Keyword,
+            TextTags.Method => CompletionItemKind.Method,
+            TextTags.ExtensionMethod => CompletionItemKind.Method,
+            TextTags.Module => CompletionItemKind.Module,
+            TextTags.Namespace => CompletionItemKind.Module,
+            TextTags.Operator => CompletionItemKind.Operator,
+            TextTags.Parameter => CompletionItemKind.Value,
+            TextTags.Property => CompletionItemKind.Property,
+            TextTags.Struct or "Structure" => CompletionItemKind.Struct,
+            TextTags.TypeParameter => CompletionItemKind.TypeParameter,
+            TextTags.EnumMember => CompletionItemKind.EnumMember,
+            TextTags.Constant => CompletionItemKind.Constant,
+            TextTags.Record => CompletionItemKind.Class,
+            TextTags.RecordStruct => CompletionItemKind.Struct,
+            _ => default
+        };
+    }
+
     public static string GetCompletionItemSymbolPrefix(string? classification, bool useUnicode)
     {
         Span<char> prefix = stackalloc char[3];
@@ -273,5 +399,32 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
         }
     }
 
-    private sealed record DocumentCacheEntry(Workspace Workspace, DocumentId DocumentId, CompletionService CompletionService);
+    private sealed record DocumentCacheEntry(Workspace Workspace, DocumentId DocumentId, Uri DocumentUri, CompletionService CompletionService, RoslynCompletionList? CompletionList = default, long? CompletionListRevision = default);
+
+    private sealed record RoslynCompletionItemLink(string DocumentUri, long ListVersion, int ItemIdx)
+    {
+        public string Serialize()
+        {
+            return $"{DocumentUri}|{ListVersion}|{ItemIdx}";
+        }
+
+        public static bool TryDeserialize(string serialized, out RoslynCompletionItemLink? result)
+        {
+            if (string.IsNullOrEmpty(serialized))
+            {
+                result = null;
+                return false;
+            }
+
+            var split = serialized.Split("|");
+            if (split.Length != 3 || string.IsNullOrEmpty(split[0]) || !long.TryParse(split[1], out var revision) || !int.TryParse(split[2], out var itemIdx))
+            {
+                result = null;
+                return false;
+            }
+
+            result = new RoslynCompletionItemLink(split[0], revision, itemIdx);
+            return true;
+        }
+    }
 }
