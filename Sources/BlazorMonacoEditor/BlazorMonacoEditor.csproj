@@ -42,6 +42,10 @@
         </Content>
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\PoeShared\PoeShared.csproj" />
+    </ItemGroup>
+
     <Target Name="NPMInstall" AfterTargets="PreBuildEvent">
         <Message Importance="high" Text="Running NPM Install" />
         <Exec Command="npm install"/>

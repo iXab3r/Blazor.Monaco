@@ -65,10 +65,10 @@
 {
     <MonacoEditor Theme="@DataContext.Theme"
                   @bind-LanguageId="@DataContext.LanguageId"
-                  @bind-SourceText="@DataContext.SourceCode"
-                  Path="@(DataContext.DocumentId != null ? $"{DataContext.DocumentId.ProjectId.Id}/{DataContext.DocumentId.Id}" : null)"
                   ShowLineNumbers="@DataContext.ShowLineNumbers"
-                  ShowCodeMap="@DataContext.ShowCodeMap"/>
+                  ShowCodeMap="@DataContext.ShowCodeMap"
+                  TextModel="@DataContext.TextModel"
+                  />
 }
 
 @code{

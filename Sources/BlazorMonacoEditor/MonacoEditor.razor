@@ -21,84 +21,12 @@
     private ElementReference monacoContainer;
     private CodeEditorFacade? editor;
     private TextModelFacade? currentTextModel;
-    private SourceText? sourceText;
-    private string? path;
     private string languageId = string.Empty;
 
     public CompositeDisposable Anchors { get; } = new();
-
+    
     [Parameter]
-    public string? Path
-    {
-        get => path;
-        set
-        {
-            if (string.Equals(path, value))
-            {
-                return;
-            }
-
-            path = value;
-            PathChanged.InvokeAsync(value);
-        }
-    }
-
-    [Parameter] public EventCallback<string?> PathChanged { get; set; }
-
-    [Parameter]
-    public SourceText? SourceText
-    {
-        get => sourceText;
-        set
-        {
-            if (TextChanged.HasDelegate && SourceTextChanged.HasDelegate)
-            {
-                throw new InvalidOperationException($"Invalid configuration - only one of {nameof(TextChanged)} or {nameof(SourceTextChanged)} must be subscribed to");
-            }
-
-            if (ReferenceEquals(sourceText, value))
-            {
-                return;
-            }
-            
-            if (value != null && sourceText != null && value.ContentEquals(sourceText))
-            {
-                return;
-            }
-
-            sourceText = value;
-            SourceTextChanged.InvokeAsync(value);
-            if (TextChanged.HasDelegate)
-            {
-                TextChanged.InvokeAsync(value?.ToString());
-            }
-        }
-    }
-
-    [Parameter] public EventCallback<SourceText> SourceTextChanged { get; set; }
-
-    [Parameter]
-    public string? Text
-    {
-        get => sourceText?.ToString();
-        set
-        {
-            if (TextChanged.HasDelegate && SourceTextChanged.HasDelegate)
-            {
-                throw new InvalidOperationException($"Invalid configuration - only one of {nameof(TextChanged)} or {nameof(SourceTextChanged)} must be subscribed to");
-            }
-
-            var valueAsSourceText = value != null ? SourceText.From(value) : null;
-            if (valueAsSourceText != null && sourceText != null && valueAsSourceText.ContentEquals(sourceText))
-            {
-                return;
-            }
-
-            SourceText = valueAsSourceText;
-        }
-    }
-
-    [Parameter] public EventCallback<string> TextChanged { get; set; }
+    public ITextModel? TextModel { get; set; }
 
     [Parameter]
     public string LanguageId
@@ -167,7 +95,7 @@
             editor = await MonacoInterop.CreateEditor(monacoContainer);
             Logger.LogDebug("Editor Created");
             var editorSubscription = updateEditorSink
-                .Select(reason => Observable.FromAsync(token => UpdateEditor(reason, token)).Take(1)).Concat()
+                .SelectAsync(async (reason, token) => UpdateEditor(reason, token))
                 .Subscribe();
             Anchors.Add(editorSubscription);
             updateEditorSink.OnNext("OnAfterRenderAsync");
@@ -191,27 +119,41 @@
         {
             return;
         }
+
+        var textModel = TextModel ?? new TextModel();
+        var modelUri = new Uri($"inmemory://{editor.Id}/{textModel.Path}");
+        var differentUri = !string.Equals(modelUri.ToString(), currentTextModel?.Uri.ToString());
         
-        var modelUri = new Uri($"inmemory://{editor.Id}/{Path}");
-        if (currentTextModel == null || currentTextModel.Uri != modelUri)
+        if (currentTextModel == null || differentUri)
         {
             if (currentTextModel != null)
             {
                 await currentTextModel.DisposeAsync();
             }
+            
+            Logger.LogDebug($"Requesting text from text model: {textModel}");
+            var actualText = await textModel.GetTextAsync(cancellationToken);
 
             currentTextModel = await MonacoInterop.CreateTextModel(modelUri, string.Empty, LanguageId);
             Logger.LogDebug($"Created model: {currentTextModel}");
             await editor.SetModel(currentTextModel);
-            await currentTextModel.SetContent(sourceText?.ToString() ?? string.Empty);
+            await currentTextModel.SetContent(actualText.ToString());
 
             var modelSubscription = currentTextModel
                 .WhenModelContentChanged
-                .Subscribe(x =>
+                .SubscribeAsync(async (x, token) =>
                 {
-                    var currentText = SourceText ?? SourceText.From(string.Empty);
-                    var updatedText = roslynAdapter.ApplyChanges(currentText, x);
-                    SourceText = updatedText;
+                    try
+                    {
+                        var currentText = await textModel.GetTextAsync(token);
+                        var updatedText = roslynAdapter.ApplyChanges(currentText, x);
+                        await textModel.SetTextAsync(updatedText, token);
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.LogError($"Failed to apply changes to text model {textModel}", e);
+                        throw;
+                    }
                 });
             currentTextModel.Anchors.Add(modelSubscription);
         }

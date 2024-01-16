@@ -10,6 +10,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using ReactiveUI;
+using ReactiveUI.Fody.Helpers;
 
 namespace BlazorMonacoEditor.Playground.Pages;
 
@@ -17,6 +18,7 @@ public class IndexViewModel : ReactiveObject
 {
     private readonly AdhocWorkspace workspace;
     private readonly List<DocumentId> documents = new();
+    private readonly Dictionary<DocumentId, RoslynTextModel> textModelByDocumentId = new();
 
     public IndexViewModel(IRoslynCompletionProviderController roslynCompletionProviderController)
     {
@@ -41,12 +43,19 @@ public class IndexViewModel : ReactiveObject
         var newDocument = AddDocument();
         DocumentId = newDocument.Id;
         RoslynCompletionProviderController.CompletionProvider.AddWorkspace(workspace);
+        this.WhenAnyValue(x => x.DocumentId)
+            .Subscribe(x => TextModel = x == null ? null : textModelByDocumentId.GetValueOrDefault(x));
     }
+    
     public IRoslynCompletionProviderController RoslynCompletionProviderController { get; }
 
     public ProjectInfo ProjectInfo { get; }
     
+    [Reactive]
     public DocumentId DocumentId { get; set; }
+    
+    [Reactive]
+    public RoslynTextModel TextModel { get; private set; }
     
     public string DocumentIdAsString
     {
@@ -95,6 +104,13 @@ public class IndexViewModel : ReactiveObject
         var scriptDocumentInfo = DocumentInfo.Create(newDocumentId, "Script.csx", sourceCodeKind: SourceCodeKind.Script);
         var document = workspace.AddDocument(scriptDocumentInfo);
         documents.Add(newDocumentId);
+        textModelByDocumentId[newDocumentId] = new RoslynTextModel()
+        {
+            Workspace = workspace,
+            Path = $"@{newDocumentId}",
+            DocumentId = newDocumentId,
+            Text = SourceText.From($"Code in {newDocumentId} doc")
+        };
         return document;
     }
 }
