@@ -31,7 +31,7 @@ class MonacoInterop {
             return MonacoInterop.instance;
         }
 
-        this.logger.setLevel(logLevel.levels.TRACE);
+        this.logger.setLevel(logLevel.levels.INFO);
         MonacoInterop.instance = this;
         this.logger.info(`MonacoInterop instance is being created`);
         monaco.editor.setTheme('vs-dark');
