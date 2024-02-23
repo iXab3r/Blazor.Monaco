@@ -91,6 +91,13 @@ namespace BlazorMonacoEditor.Interop
             return facade;
         }
         
+        public async ValueTask<IAsyncDisposable> RegisterSignatureHelpProvider(ISignatureHelpProvider signatureHelpProvider)
+        {
+            var facade = new SignatureHelpProviderFacade(signatureHelpProvider);
+            await InvokeVoidAsync("registerSignatureHelpProvider", facade.ObjectReference);
+            return facade;
+        }
+        
         public async ValueTask DisposeEditor(MonacoEditorId editorId)
         {
             await InvokeVoidAsync("disposeEditor", editorId);

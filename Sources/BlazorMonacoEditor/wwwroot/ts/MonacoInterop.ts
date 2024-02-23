@@ -19,14 +19,13 @@ self.MonacoEnvironment = {
 
 class MonacoInterop {
 
-    private static instance:MonacoInterop;
+    private static instance: MonacoInterop;
     private readonly logger: logLevel.Logger = logLevel.getLogger(MonacoInterop.name);
-    
+
     private readonly editors: { [id: string]: IEditorContext } = {};
     private readonly models: { [uri: string]: ITextModelContext } = {};
-    
-    constructor()
-    {
+
+    constructor() {
         if (MonacoInterop.instance) {
             return MonacoInterop.instance;
         }
@@ -72,33 +71,33 @@ class MonacoInterop {
 
         this.editors[editorId] = editorContext;
     }
-    
-    disposeEditor(editorId: string){
+
+    disposeEditor(editorId: string) {
         this.logger.debug(`Disposing editor ${editorId}`)
         const editorCtxt = this.getEditorById(editorId);
         this.editors[editorId] = null;
         editorCtxt.codeEditor.dispose();
     }
-    
-    updateEditorOptions(editorId: string, newOptions: monaco.editor.IEditorOptions & monaco.editor.IGlobalEditorOptions){
+
+    updateEditorOptions(editorId: string, newOptions: monaco.editor.IEditorOptions & monaco.editor.IGlobalEditorOptions) {
         this.logger.info(`Updating editor options: ${JSON.stringify(newOptions)}`);
         const editorCtxt = this.getEditorById(editorId);
         editorCtxt.codeEditor.updateOptions(newOptions);
     }
 
-    setEditorCompletionDetailsVisibility(editorId: string, isVisible: boolean){
+    setEditorCompletionDetailsVisibility(editorId: string, isVisible: boolean) {
         const editorCtxt = this.getEditorById(editorId);
         const editor = editorCtxt.codeEditor;
         const suggestionController: any = editor.getContribution("editor.contrib.suggestController");
         suggestionController.widget.value._setDetailsVisible(isVisible);
         //suggestionController.widget.value._persistedSize.store({width: 400, height: 256});
     }
-    
-    executeEditorEdits(editorId: string, source: string, edits: monaco.editor.IIdentifiedSingleEditOperation[]){
+
+    executeEditorEdits(editorId: string, source: string, edits: monaco.editor.IIdentifiedSingleEditOperation[]) {
         const editorCtxt = this.getEditorById(editorId);
         editorCtxt.codeEditor.executeEdits(source, edits);
     }
-    
+
     /**
      * Create a new text model.
      * @param uri The URI of the model.
@@ -106,14 +105,13 @@ class MonacoInterop {
      * @param blazorCallback An object on which to call event handling methods.
      * @param language The ID of the model's language.
      */
-    createTextModel(uri: string, value: string, blazorCallback: IBlazorInteropObject, language?: string)
-    {
+    createTextModel(uri: string, value: string, blazorCallback: IBlazorInteropObject, language?: string) {
         this.logger.debug(`Creating text model with Uri ${uri}, language: ${language}, .net callback: ${blazorCallback}`);
-        
+
         const monacoUri = monaco.Uri.parse(uri);
 
         const model = monaco.editor.createModel(value, language, monacoUri);
-        
+
         const modelContext: ITextModelContext = {
             textModel: model,
             changeTimer: 0,
@@ -132,9 +130,9 @@ class MonacoInterop {
         this.logger.debug(`Created text model with Uri ${uri}, Id: ${model.id}`);
     }
 
-    disposeTextModel(textModelUri: string){
+    disposeTextModel(textModelUri: string) {
         this.logger.debug(`Disposing text model with Uri ${textModelUri}`);
-        
+
         const modelCtxt = this.getTextModelByUri(textModelUri);
 
         this.models[textModelUri] = null;
@@ -142,15 +140,13 @@ class MonacoInterop {
         this.logger.debug(`Disposed text model with Uri ${textModelUri}, id: ${modelCtxt.textModel.id}`);
     }
 
-   
-    setModelMarkers(textModelUri: string, owner: string, markers: monaco.editor.IMarkerData[])
-    {
+
+    setModelMarkers(textModelUri: string, owner: string, markers: monaco.editor.IMarkerData[]) {
         const modelCtxt = this.getTextModelByUri(textModelUri);
         monaco.editor.setModelMarkers(modelCtxt.textModel, owner, markers);
     }
 
-    setModelDecorations(editorId: string, decorations: monaco.editor.IModelDeltaDecoration[])
-    {
+    setModelDecorations(editorId: string, decorations: monaco.editor.IModelDeltaDecoration[]) {
         const editorCtxt = this.getEditorById(editorId);
         let collection = editorCtxt.codeEditor.createDecorationsCollection(decorations);
     }
@@ -160,8 +156,7 @@ class MonacoInterop {
      * @param textModelUri The text model URI.
      * @param newContent The new content of the model.
      */
-    setModelContent(textModelUri: string, newContent: string)
-    {
+    setModelContent(textModelUri: string, newContent: string) {
         const modelCtxt = this.getTextModelByUri(textModelUri);
         modelCtxt.textModel.setValue(newContent);
     }
@@ -171,8 +166,7 @@ class MonacoInterop {
      * @param textModelUri The text model URI.
      * @param languageId LanguageId
      */
-    setEditorModelLanguage(textModelUri: string, languageId: string)
-    {
+    setEditorModelLanguage(textModelUri: string, languageId: string) {
         const modelCtxt = this.getTextModelByUri(textModelUri);
         monaco.editor.setModelLanguage(modelCtxt.textModel, languageId);
     }
@@ -182,57 +176,59 @@ class MonacoInterop {
      * @param editorId The ID of the editor.
      * @param textModelUri The URI of the text model.
      */
-    setEditorModel(editorId: string, textModelUri: string)
-    {
+    setEditorModel(editorId: string, textModelUri: string) {
         const editorCtxt = this.getEditorById(editorId);
         const modelCtxt = this.getTextModelByUri(textModelUri);
         editorCtxt.codeEditor.setModel(modelCtxt.textModel);
     }
-    
-    getTextModelByUri(textModelUri: string) : ITextModelContext{
+
+    getTextModelByUri(textModelUri: string): ITextModelContext {
         const modelCtxt = this.models[textModelUri];
-        if (!modelCtxt)
-        {
+        if (!modelCtxt) {
             throw `Specified model ${textModelUri} is not created.`;
         }
         return modelCtxt;
     }
-    
-    getEditorById(editorId: string) : IEditorContext{
+
+    getEditorById(editorId: string): IEditorContext {
         const editorCtxt = this.editors[editorId];
-        if (!editorCtxt)
-        {
+        if (!editorCtxt) {
             throw `Specified editor ${editorId} is not created.`;
         }
         return editorCtxt;
     }
-    
-    async registerCodeActionProvider(blazorCallback: IBlazorInteropObject){
+
+    async registerCodeActionProvider(blazorCallback: IBlazorInteropObject) {
         this.logger.debug(`Registering new code action provider: ${blazorCallback}`);
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         this.logger.debug(`Code action provider language: ${languageId}`);
-        
-        monaco.editor.registerCommand("BlazorQuickFixApplyCommand", async function(editor, ...args) {
+
+        monaco.editor.registerCommand("BlazorQuickFixApplyCommand", async function (editor, ...args) {
             await blazorCallback.invokeMethodAsync("ApplyCodeAction", args);
         });
 
         monaco.languages.registerCodeActionProvider(languageId, {
             provideCodeActions: async (
-                model: monaco.editor.ITextModel ,
+                model: monaco.editor.ITextModel,
                 range: monaco.Range,
-                context: monaco.languages.CodeActionContext ,
-                token: monaco.CancellationToken 
+                context: monaco.languages.CodeActionContext,
+                token: monaco.CancellationToken
             ): Promise<monaco.languages.CodeActionList> => {
                 this.logger.trace(`Code action request: ${model.uri}, range: ${range}, context: ${context}`);
                 const codeActionList: monaco.languages.CodeActionList = await blazorCallback.invokeMethodAsync("ProvideCodeActions", model.uri, range, context);
+                if (!codeActionList) {
+                    this.logger.trace(`Code action list is empty`);
+                    return null;
+                }
                 this.logger.trace(`Code action list received: ${codeActionList.actions.length}`);
                 return {
                     actions: codeActionList.actions,
-                    dispose: () => {}
+                    dispose: () => {
+                    }
                 };
             },
             resolveCodeAction: async (
-                codeAction: monaco.languages.CodeAction, 
+                codeAction: monaco.languages.CodeAction,
                 token: monaco.CancellationToken
             ): Promise<monaco.languages.CodeAction> => {
                 this.logger.trace(`Code action resolve request: ${codeAction}`);
@@ -242,17 +238,21 @@ class MonacoInterop {
         });
     }
 
-    async registerHoverProvider(blazorCallback: IBlazorInteropObject){
+    async registerHoverProvider(blazorCallback: IBlazorInteropObject) {
         this.logger.debug(`Registering new hover provider: ${blazorCallback}`);
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         this.logger.debug(`Hover provider language: ${languageId}`);
 
         monaco.languages.registerHoverProvider(languageId, {
             provideHover: async (model: monaco.editor.ITextModel, position: monaco.Position, token: monaco.CancellationToken) => {
-               this.logger.trace(`Code hover request: ${model.uri}, position: ${position}`);
-               const hover: monaco.languages.Hover = await blazorCallback.invokeMethodAsync("ProvideHover", model.uri, position);
-               this.logger.trace(`Code hover received`);
-               return hover;
+                this.logger.trace(`Code hover request: ${model.uri}, position: ${position}`);
+                const hover: monaco.languages.Hover = await blazorCallback.invokeMethodAsync("ProvideHover", model.uri, position);
+                if (!hover) {
+                    this.logger.trace(`Code hover is empty`);
+                    return null;
+                }
+                this.logger.trace(`Code hover received`);
+                return hover;
             }
         });
     }
@@ -262,20 +262,51 @@ class MonacoInterop {
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         const triggerCharacters: string[] = await blazorCallback.invokeMethodAsync("GetTriggerCharacters");
         this.logger.debug(`Completion provider language: ${languageId}, trigger characters: ${JSON.stringify(triggerCharacters)}`);
-        
+
         monaco.languages.registerCompletionItemProvider(languageId, {
             provideCompletionItems: async (model: monaco.editor.ITextModel, position: monaco.IPosition, completionContext: monaco.languages.CompletionContext) => {
                 const caretOffset = model.getOffsetAt(position);
                 this.logger.trace(`Completion request: ${model.uri}, context: ${completionContext}, position: ${position}, caretOffset: ${caretOffset}`);
                 const completionList: monaco.languages.CompletionList = await blazorCallback.invokeMethodAsync("ProvideCompletionItems", model.uri, completionContext, position, caretOffset);
+                if (!completionList) {
+                    this.logger.trace(`Completion list is empty`);
+                    return null;
+                }
                 this.logger.trace(`Completion list received: ${completionList.suggestions.length}`);
                 return completionList;
             },
             resolveCompletionItem: async (item: monaco.languages.CompletionItem): Promise<monaco.languages.CompletionItem> => {
-                const completionItem: monaco.languages.CompletionItem  = await blazorCallback.invokeMethodAsync("ResolveCompletionItem", item);
+                const completionItem: monaco.languages.CompletionItem = await blazorCallback.invokeMethodAsync("ResolveCompletionItem", item);
                 return completionItem;
             },
             triggerCharacters: triggerCharacters
+        });
+    }
+
+    async registerSignatureHelpProvider(blazorCallback: IBlazorInteropObject) {
+        this.logger.debug(`Registering new signature help provider: ${blazorCallback}`);
+        const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
+        const triggerCharacters: string[] = await blazorCallback.invokeMethodAsync("GetTriggerCharacters");
+        const retriggerCharacters: string[] = await blazorCallback.invokeMethodAsync("GetRetriggerCharacters");
+        this.logger.debug(`Signature help provider language: ${languageId}, trigger characters: ${JSON.stringify(triggerCharacters)}, retrigger characters: ${JSON.stringify(retriggerCharacters)}, `);
+
+        monaco.languages.registerSignatureHelpProvider(languageId, {
+            provideSignatureHelp: async (model: monaco.editor.ITextModel, position: monaco.Position, token: monaco.CancellationToken, context: monaco.languages.SignatureHelpContext) => {
+                this.logger.trace(`Code signature help request: ${model.uri}, position: ${position}, context: ${context}`);
+                const signatureHelp: monaco.languages.SignatureHelp = await blazorCallback.invokeMethodAsync("ProvideSignatureHelp", model.uri, context, position);
+                if (!signatureHelp) {
+                    this.logger.trace(`Code signature help is empty`);
+                    return null;
+                }
+                this.logger.trace(`Code signature help received: ${signatureHelp}`);
+                return {
+                    value: signatureHelp,
+                    dispose: () => {
+                    }
+                };
+            },
+            signatureHelpTriggerCharacters: triggerCharacters,
+            signatureHelpRetriggerCharacters: retriggerCharacters
         });
     }
 }

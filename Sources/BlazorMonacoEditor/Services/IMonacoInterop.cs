@@ -13,6 +13,8 @@ public interface IMonacoInterop
     
     ValueTask<IAsyncDisposable> RegisterHoverProvider(IHoverProvider hoverProvider);
 
+    ValueTask<IAsyncDisposable> RegisterSignatureHelpProvider(ISignatureHelpProvider signatureHelpProvider);
+
     ValueTask SetModelMarkers(Uri modelUri, string markersOwner, MarkerData[] markers);
 
     ValueTask SetModelContent(Uri modelUri, string newContent);

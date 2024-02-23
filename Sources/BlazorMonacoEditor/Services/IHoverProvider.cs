@@ -1,7 +1,7 @@
 ﻿using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 
-namespace BlazorMonacoEditor.Scaffolding;
+namespace BlazorMonacoEditor.Services;
 
 /// <summary>
 /// Provides hover information for symbols or words in a specific language within the Monaco editor.
