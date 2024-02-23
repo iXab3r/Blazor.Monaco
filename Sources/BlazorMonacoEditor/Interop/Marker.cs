@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 
 namespace BlazorMonacoEditor.Interop;
 
+
+
 /// <summary>
 /// Represents a marker in the Monaco editor, which could be an error, warning, info, or hint in the code.
 /// </summary>

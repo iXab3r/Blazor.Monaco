@@ -10,11 +10,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Roslyn.Scaffolding;
+using BlazorMonacoEditor.Services;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Classification;
 using Microsoft.CodeAnalysis.Completion;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.JSInterop;
 using CompletionContext = BlazorMonacoEditor.Interop.CompletionContext;
 using CompletionItem = BlazorMonacoEditor.Interop.CompletionItem;
 using CompletionList = BlazorMonacoEditor.Interop.CompletionList;
@@ -23,87 +25,37 @@ using RoslynCompletionList = Microsoft.CodeAnalysis.Completion.CompletionList;
 
 namespace BlazorMonacoEditor.Roslyn.Services;
 
-public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
+public class RoslynCompletionProvider : IRoslynCompletionProvider
 {
     private readonly ILogger log;
     private readonly IMemoryCache documentsByUri;
     private readonly ConcurrentDictionary<Workspace, int> workspaces = new();
+    private readonly IMonacoInterop monacoInterop;
+    private IAsyncDisposable? registrationAnchor;
     private long completionRevision;
-
-    public RoslynCompletionProvider(ILoggerFactory logFactory)
+    
+    public RoslynCompletionProvider(IMonacoInterop monacoInterop, ILoggerFactory logFactory)
     {
+        this.monacoInterop = monacoInterop;
         log = logFactory.CreateLogger<RoslynCompletionProvider>();
         documentsByUri = new MemoryCache(new MemoryCacheOptions());
     }
     
+    [JSInvokable]
     public async Task<string[]> GetTriggerCharacters()
     {
         return new[] {"."};
     }
 
+    [JSInvokable]
     public async Task<string> GetLanguage()
     {
         return "csharp";
     }
+    
+    
 
-    public IDisposable AddWorkspace(Workspace workspace)
-    {
-        lock (workspaces)
-        {
-            workspaces.AddOrUpdate(workspace, _ => 1, (_, existingReferences) => existingReferences + 1);
-        }
-
-        return Disposable.Create(() =>
-        {
-            lock (workspaces)
-            {
-                var references = workspaces.AddOrUpdate(workspace, _ => 0, (_, existingReferences) => existingReferences - 1);
-                if (references <= 0)
-                {
-                    workspaces.TryRemove(workspace, out var _);
-                }
-            }
-        });
-    }
-
-    private DocumentCacheEntry? FindEntryByUri(Uri? documentUri)
-    {
-        if (documentUri == null || documentUri.Segments.Length != 3)
-        {
-            return null;
-        }
-
-        if (documentsByUri.TryGetValue(documentUri, out var cachedDocument) && cachedDocument is DocumentCacheEntry documentCacheEntry)
-        {
-            return documentCacheEntry;
-        }
-
-        if (!DocumentIdTypeConverter.TryConvert(documentUri.AbsolutePath, out var documentId) || documentId == null)
-        {
-            return null;
-        }
-
-        // ReSharper disable once InconsistentlySynchronizedField expected
-        foreach (var workspace in workspaces.Keys)
-        {
-            var workspaceDocument = workspace.CurrentSolution.GetDocument(documentId);
-            if (workspaceDocument == null)
-            {
-                continue;
-            }
-
-            var completionService = workspaceDocument.Project.Services.GetRequiredService<CompletionService>();
-            var result = new DocumentCacheEntry(workspace, documentId, documentUri, CompletionService: completionService);
-            documentsByUri.Set(documentUri, result, new MemoryCacheEntryOptions()
-            {
-                SlidingExpiration = TimeSpan.FromMinutes(5)
-            });
-            return result;
-        }
-
-        return null;
-    }
-
+    [JSInvokable]
     public async Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, MonacoPosition caretPosition, int caretOffset)
     {
         var revision = Interlocked.Increment(ref completionRevision);
@@ -178,6 +130,7 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
         return monacoCompletionList;
     }
 
+    [JSInvokable]
     public async Task<CompletionItem> ResolveCompletionItem(CompletionItem item)
     {
         var serializedLink = item.Documentation?.Value;
@@ -214,20 +167,96 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
         }
 
         var completionItem = entry.CompletionList.ItemsList[itemLink.ItemIdx];
-        var documentation = BuildDocumentation(completionItem);
+        return item with
+        {
+            Documentation = await BuildMarkdownDocumentation(entry.CompletionService, document, completionItem)
+        };
+    }
+    
+    public async Task Register()
+    {
+        if (registrationAnchor != null)
+        {
+            return;
+        }
 
-        CompletionDescription? description;
-        try
+        registrationAnchor = await monacoInterop.RegisterCompletionProvider(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        var anchor = registrationAnchor;
+        if (anchor != null)
         {
-            description = await entry.CompletionService.GetDescriptionAsync(document, completionItem);
+            await anchor.DisposeAsync();
         }
-        catch (Exception e)
+    }
+
+    public IDisposable AddWorkspace(Workspace workspace)
+    {
+        lock (workspaces)
         {
-            log.LogError(e, $"Failed to build description for item {item}");
-            return item;
+            workspaces.AddOrUpdate(workspace, _ => 1, (_, existingReferences) => existingReferences + 1);
         }
-        
-        return item with {  Documentation = new MarkdownString { Value = $"{documentation}<br>{description?.Text ?? "No documentation"}" }};
+
+        return Disposable.Create(() =>
+        {
+            lock (workspaces)
+            {
+                var references = workspaces.AddOrUpdate(workspace, _ => 0, (_, existingReferences) => existingReferences - 1);
+                if (references <= 0)
+                {
+                    workspaces.TryRemove(workspace, out var _);
+                }
+            }
+        });
+    }
+    
+    protected virtual async Task<MarkdownString> BuildMarkdownDocumentation(CompletionService completionService, Document document, RoslynCompletionItem completionItem)
+    {
+        return new MarkdownString()
+        {
+            Value = BuildDocumentation(completionItem),
+            IsTrusted = true
+        };
+    }
+
+    private DocumentCacheEntry? FindEntryByUri(Uri? documentUri)
+    {
+        if (documentUri == null || documentUri.Segments.Length != 3)
+        {
+            return null;
+        }
+
+        if (documentsByUri.TryGetValue(documentUri, out var cachedDocument) && cachedDocument is DocumentCacheEntry documentCacheEntry)
+        {
+            return documentCacheEntry;
+        }
+
+        if (!DocumentIdTypeConverter.TryConvert(documentUri.AbsolutePath, out var documentId) || documentId == null)
+        {
+            return null;
+        }
+
+        // ReSharper disable once InconsistentlySynchronizedField expected
+        foreach (var workspace in workspaces.Keys)
+        {
+            var workspaceDocument = workspace.CurrentSolution.GetDocument(documentId);
+            if (workspaceDocument == null)
+            {
+                continue;
+            }
+
+            var completionService = workspaceDocument.Project.Services.GetRequiredService<CompletionService>();
+            var result = new DocumentCacheEntry(workspace, documentId, documentUri, CompletionService: completionService);
+            documentsByUri.Set(documentUri, result, new MemoryCacheEntryOptions()
+            {
+                SlidingExpiration = TimeSpan.FromMinutes(5)
+            });
+            return result;
+        }
+
+        return null;
     }
 
     private static string BuildDocumentation(RoslynCompletionItem roslynCompletion)
@@ -241,51 +270,38 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
 
         if (!string.IsNullOrEmpty(roslynCompletion.DisplayTextSuffix))
         {
-            documentationBuilder.AppendLine($"{nameof(roslynCompletion.DisplayTextSuffix)}: {roslynCompletion.DisplayTextSuffix}");
+            documentationBuilder.AppendLine($"\n{nameof(roslynCompletion.DisplayTextSuffix)}: {roslynCompletion.DisplayTextSuffix}");
         }
 
         if (roslynCompletion.IsComplexTextEdit)
         {
-            documentationBuilder.AppendLine($"{nameof(roslynCompletion.IsComplexTextEdit)}: {roslynCompletion.IsComplexTextEdit}");
+            documentationBuilder.AppendLine($"\n{nameof(roslynCompletion.IsComplexTextEdit)}: {roslynCompletion.IsComplexTextEdit}");
         }
 
         if (!string.IsNullOrEmpty(roslynCompletion.InlineDescription))
         {
-            documentationBuilder.AppendLine($"{nameof(roslynCompletion.InlineDescription)}: {roslynCompletion.InlineDescription}");
+            documentationBuilder.AppendLine($"\n{nameof(roslynCompletion.InlineDescription)}: {roslynCompletion.InlineDescription}");
         }
 
         if (roslynCompletion.Rules.MatchPriority != default)
         {
-            documentationBuilder.AppendLine($"{nameof(roslynCompletion.Rules.MatchPriority)}: {roslynCompletion.Rules.MatchPriority}");
+            documentationBuilder.AppendLine($"\n{nameof(roslynCompletion.Rules.MatchPriority)}: {roslynCompletion.Rules.MatchPriority}");
         }
 
         if (roslynCompletion.Tags.Length > 0)
         {
-            documentationBuilder.AppendLine($"Tags: {string.Join(", ", roslynCompletion.Tags)}");
+            documentationBuilder.AppendLine($"\nTags: {string.Join(", ", roslynCompletion.Tags)}\n");
         }
 
         if (roslynCompletion.Properties.Count > 0)
         {
             foreach (var completionProperty in roslynCompletion.Properties)
             {
-                documentationBuilder.AppendLine($"{completionProperty.Key}: {completionProperty.Value}");
+                documentationBuilder.AppendLine($"\n{completionProperty.Key}: {completionProperty.Value}");
             }
         }
 
         return documentationBuilder.ToString();
-    }
-
-    private static string GetDisplayText(RoslynCompletionItem item)
-    {
-        var text = item.DisplayTextPrefix + item.DisplayText + item.DisplayTextSuffix;
-        if (item.Tags.Length > 0)
-        {
-            var classification = TextTagToClassificationTypeName(item.Tags.First());
-            var prefix = GetCompletionItemSymbolPrefix(classification, useUnicode: true);
-            return $"{prefix}{text}";
-        }
-
-        return text;
     }
 
     public static string? TextTagToClassificationTypeName(string taggedTextTag)

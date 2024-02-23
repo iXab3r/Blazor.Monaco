@@ -7,7 +7,7 @@ public interface ICodeActionProvider
 {
     Task<string> GetLanguage();
     
-    Task<CodeActionList?> ProviderCodeActions(MonacoUri modelUri, MonacoRange range, CodeActionContext codeActionContext);
+    Task<CodeActionList?> ProvideCodeActions(MonacoUri modelUri, MonacoRange range, CodeActionContext codeActionContext);
     
     Task<CodeAction?> ResolveCodeAction(CodeAction codeAction);
 

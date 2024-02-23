@@ -77,6 +77,13 @@ namespace BlazorMonacoEditor.Interop
             return facade;
         }
         
+        public async ValueTask<IAsyncDisposable> RegisterHoverProvider(IHoverProvider hoverProvider)
+        {
+            var facade = new HoverProviderFacade(hoverProvider);
+            await InvokeVoidAsync("registerHoverProvider", facade.ObjectReference);
+            return facade;
+        }
+        
         public async ValueTask<IAsyncDisposable> RegisterCodeActionProvider(ICodeActionProvider codeActionProvider)
         {
             var facade = new CodeActionProviderFacade(codeActionProvider);
@@ -92,6 +99,11 @@ namespace BlazorMonacoEditor.Interop
         public async ValueTask UpdateOptions(MonacoEditorId editorId, EditorOptions options)
         {
             await InvokeVoidAsync("updateEditorOptions", editorId, options);
+        } 
+        
+        public async ValueTask ShowCompletionDetails(MonacoEditorId editorId, bool isVisible)
+        {
+            await InvokeVoidAsync("setEditorCompletionDetailsVisibility", editorId, isVisible);
         }
         
         public async ValueTask UpdateOptions(MonacoEditorId editorId, GlobalEditorOptions options)

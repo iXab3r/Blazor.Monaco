@@ -85,6 +85,14 @@ class MonacoInterop {
         const editorCtxt = this.getEditorById(editorId);
         editorCtxt.codeEditor.updateOptions(newOptions);
     }
+
+    setEditorCompletionDetailsVisibility(editorId: string, isVisible: boolean){
+        const editorCtxt = this.getEditorById(editorId);
+        const editor = editorCtxt.codeEditor;
+        const suggestionController: any = editor.getContribution("editor.contrib.suggestController");
+        suggestionController.widget.value._setDetailsVisible(isVisible);
+        //suggestionController.widget.value._persistedSize.store({width: 400, height: 256});
+    }
     
     executeEditorEdits(editorId: string, source: string, edits: monaco.editor.IIdentifiedSingleEditOperation[]){
         const editorCtxt = this.getEditorById(editorId);
@@ -216,7 +224,7 @@ class MonacoInterop {
                 token: monaco.CancellationToken 
             ): Promise<monaco.languages.CodeActionList> => {
                 this.logger.trace(`Code action request: ${model.uri}, range: ${range}, context: ${context}`);
-                const codeActionList: monaco.languages.CodeActionList = await blazorCallback.invokeMethodAsync("ProviderCodeActions", model.uri, range, context);
+                const codeActionList: monaco.languages.CodeActionList = await blazorCallback.invokeMethodAsync("ProvideCodeActions", model.uri, range, context);
                 this.logger.trace(`Code action list received: ${codeActionList.actions.length}`);
                 return {
                     actions: codeActionList.actions,
@@ -230,6 +238,21 @@ class MonacoInterop {
                 this.logger.trace(`Code action resolve request: ${codeAction}`);
                 const resolvedCodeAction: monaco.languages.CodeAction = await blazorCallback.invokeMethodAsync("ResolveCodeAction", codeAction);
                 return resolvedCodeAction;
+            }
+        });
+    }
+
+    async registerHoverProvider(blazorCallback: IBlazorInteropObject){
+        this.logger.debug(`Registering new hover provider: ${blazorCallback}`);
+        const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
+        this.logger.debug(`Hover provider language: ${languageId}`);
+
+        monaco.languages.registerHoverProvider(languageId, {
+            provideHover: async (model: monaco.editor.ITextModel, position: monaco.Position, token: monaco.CancellationToken) => {
+               this.logger.trace(`Code hover request: ${model.uri}, position: ${position}`);
+               const hover: monaco.languages.Hover = await blazorCallback.invokeMethodAsync("ProvideHover", model.uri, position);
+               this.logger.trace(`Code hover received`);
+               return hover;
             }
         });
     }

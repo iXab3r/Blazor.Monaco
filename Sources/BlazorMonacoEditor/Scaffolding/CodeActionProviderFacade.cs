@@ -25,9 +25,9 @@ internal sealed class CodeActionProviderFacade : IAsyncDisposable, ICodeActionPr
     }
 
     [JSInvokable]
-    public async Task<CodeActionList?> ProviderCodeActions(MonacoUri modelUri, MonacoRange range, CodeActionContext codeActionContext)
+    public async Task<CodeActionList?> ProvideCodeActions(MonacoUri modelUri, MonacoRange range, CodeActionContext codeActionContext)
     {
-        var result = await provider.ProviderCodeActions(modelUri, range, codeActionContext);
+        var result = await provider.ProvideCodeActions(modelUri, range, codeActionContext);
         return result;
     }
 
@@ -46,5 +46,6 @@ internal sealed class CodeActionProviderFacade : IAsyncDisposable, ICodeActionPr
 
     public async ValueTask DisposeAsync()
     {
+        ObjectReference.Dispose();
     }
 }

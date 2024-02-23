@@ -32,6 +32,11 @@ namespace BlazorMonacoEditor.Scaffolding
         public MonacoEditorId Id { get; }
         
         public EditorOptions? Options { get; private set; }
+
+        public ValueTask ShowCompletionDetails(MonacoEditorId editorId, bool isVisible)
+        {
+            return interop.ShowCompletionDetails(editorId, isVisible);
+        }
         
         public async ValueTask UpdateOptions(EditorOptions options)
         {

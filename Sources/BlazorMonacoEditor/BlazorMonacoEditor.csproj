@@ -6,6 +6,7 @@
         <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
         <Nullable>enable</Nullable>
         <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <NoWarn>CA1416;NU1701;CS0649;CS0414;CS1998;CS1591;</NoWarn>
         <EnableDefaultContentItems>true<!-- Important for Blazor Scoped CSS --></EnableDefaultContentItems>
     </PropertyGroup>

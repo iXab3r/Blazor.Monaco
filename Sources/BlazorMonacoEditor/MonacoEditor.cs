@@ -44,7 +44,7 @@ partial class MonacoEditor : IAsyncDisposable
     [Parameter] public bool ShowCodeMap { get; set; }
     
     [Parameter] public bool IsReadOnly { get; set; }
-
+    
     [Parameter] public EventCallback<bool> ShowCodeMapChanged { get; set; }
     
     public CompositeDisposable Anchors { get; } = new();
@@ -64,6 +64,7 @@ partial class MonacoEditor : IAsyncDisposable
             Logger.LogDebug("First Render");
 
             editor = await MonacoInterop.CreateEditor(monacoContainer, Id);
+            await MonacoInterop.ShowCompletionDetails(Id, true);
             Logger.LogDebug("Editor Created");
 
             Anchors.Add(updateSink.SubscribeAsync(UpdateEditor));
