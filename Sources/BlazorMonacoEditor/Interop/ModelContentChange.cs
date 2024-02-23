@@ -9,7 +9,7 @@ internal readonly record struct ModelContentChange
     /// </summary>
     [JsonPropertyName("range")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public Range Range { get; init; }
+    public MonacoRange Range { get; init; }
 
     /// <summary>
     /// The offset of the range that got replaced.

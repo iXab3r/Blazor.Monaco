@@ -30,16 +30,15 @@ namespace BlazorMonacoEditor.Interop
            
             this.logger = logFactory.CreateLogger<MonacoInterop>();
         }
-        
+
         /// <summary>
         /// Create a new Monaco Code Editor, inside the specified HTML element.
         /// </summary>
         /// <param name="element">The HTML element.</param>
+        /// <param name="editorId"></param>
         /// <returns>A code editor.</returns>
-        public async ValueTask<CodeEditorFacade> CreateEditor(ElementReference element)
+        public async ValueTask<CodeEditorFacade> CreateEditor(ElementReference element, MonacoEditorId editorId)
         {
-            var editorId = $"Monaco-{Guid.NewGuid().ToString().Replace("-", "")}";
-
             var monacoEditor = new CodeEditorFacade(editorId, this);
 
             await InvokeVoidAsync("createEditor", editorId, element, DotNetObjectReference.Create(monacoEditor));
@@ -73,41 +72,36 @@ namespace BlazorMonacoEditor.Interop
         
         public async ValueTask<IAsyncDisposable> RegisterCompletionProvider(ICompletionProvider completionProvider)
         {
-            var completionProviderFacade = new CompletionProviderFacade(completionProvider);
-            await InvokeVoidAsync("registerCompletionProvider", completionProviderFacade.ObjectReference);
-            return completionProviderFacade;
+            var facade = new CompletionProviderFacade(completionProvider);
+            await InvokeVoidAsync("registerCompletionProvider", facade.ObjectReference);
+            return facade;
         }
         
-        /// <summary>
-        /// Sets the content of a given model.
-        /// </summary>
-        /// <returns>Completion task.</returns>
-        public async ValueTask DisposeEditor(CodeEditorFacade editor)
+        public async ValueTask<IAsyncDisposable> RegisterCodeActionProvider(ICodeActionProvider codeActionProvider)
         {
-            if (editor is null)
-            {
-                throw new ArgumentNullException(nameof(editor));
-            }
-
-            await InvokeVoidAsync("disposeEditor", editor.Id);
-        }
-
-        public async ValueTask UpdateOptions(CodeEditorFacade editor, EditorOptions options)
-        {
-            if (editor is null)
-            {
-                throw new ArgumentNullException(nameof(editor));
-            }
-            await InvokeVoidAsync("updateEditorOptions", editor.Id, options);
+            var facade = new CodeActionProviderFacade(codeActionProvider);
+            await InvokeVoidAsync("registerCodeActionProvider", facade.ObjectReference);
+            return facade;
         }
         
-        public async ValueTask UpdateOptions(CodeEditorFacade editor, GlobalEditorOptions options)
+        public async ValueTask DisposeEditor(MonacoEditorId editorId)
         {
-            if (editor is null)
-            {
-                throw new ArgumentNullException(nameof(editor));
-            }
-            await InvokeVoidAsync("updateEditorOptions", editor.Id, options);
+            await InvokeVoidAsync("disposeEditor", editorId);
+        }
+
+        public async ValueTask UpdateOptions(MonacoEditorId editorId, EditorOptions options)
+        {
+            await InvokeVoidAsync("updateEditorOptions", editorId, options);
+        }
+        
+        public async ValueTask UpdateOptions(MonacoEditorId editorId, GlobalEditorOptions options)
+        {
+            await InvokeVoidAsync("updateEditorOptions", editorId, options);
+        }
+        
+        public async ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IdentifiedSingleEditOperation[] operations)
+        {
+            await InvokeVoidAsync("executeEditorEdits", editorId, editSource, operations);
         }
 
         /// <summary>
@@ -128,17 +122,38 @@ namespace BlazorMonacoEditor.Interop
         /// <summary>
         /// Sets the content of a given model.
         /// </summary>
-        /// <param name="model">The text model to update.</param>
+        /// <param name="modelUri">The text model to update.</param>
         /// <param name="newContent">The new content of the file.</param>
         /// <returns>Completion task.</returns>
-        public async ValueTask SetModelContent(TextModelFacade model, string newContent)
+        public async ValueTask SetModelContent(Uri modelUri, string newContent)
         {
-            if (model is null)
+            if (modelUri is null)
             {
-                throw new ArgumentNullException(nameof(model));
+                throw new ArgumentNullException(nameof(modelUri));
             }
 
-            await InvokeVoidAsync("setModelContent", model.Uri.ToString(), newContent);
+            await InvokeVoidAsync("setModelContent", modelUri.ToString(), newContent);
+        }
+        
+        /// <summary>
+        /// Sets the markers of a given model.
+        /// </summary>
+        /// <param name="modelUri">The text model to update.</param>
+        /// <param name="newContent">The new content of the file.</param>
+        /// <returns>Completion task.</returns>
+        public async ValueTask SetModelMarkers(Uri modelUri, string markersOwner, MarkerData[] markers)
+        {
+            if (modelUri is null)
+            {
+                throw new ArgumentNullException(nameof(modelUri));
+            }
+
+            await InvokeVoidAsync("setModelMarkers", modelUri.ToString(), markersOwner, markers);
+        } 
+        
+        public async ValueTask SetModelDecorations(MonacoEditorId editorId, ModelDeltaDecoration[] decorations)
+        {
+            await InvokeVoidAsync("setModelDecorations", editorId.ToString(), decorations);
         }
 
         /// <summary>

@@ -10,6 +10,8 @@ namespace BlazorMonacoEditor.Roslyn.Scaffolding;
 public sealed class RoslynTextModel : ITextModel
 {
     public SourceText Text { get; set; } = SourceText.From("");
+
+    public TextModelId Id => new($"{DocumentId.ProjectId.Id}/{DocumentId.Id}");
     
     public required string Path { get; init; }
 

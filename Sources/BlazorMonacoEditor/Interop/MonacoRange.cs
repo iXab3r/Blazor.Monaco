@@ -2,7 +2,7 @@
 
 namespace BlazorMonacoEditor.Interop;
 
-public readonly record struct Range
+public readonly record struct MonacoRange
 {
     /// <summary>
     /// Line number on which the range starts (starts at 1).

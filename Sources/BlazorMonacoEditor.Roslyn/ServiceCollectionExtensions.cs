@@ -15,9 +15,9 @@ namespace BlazorMonacoEditor.Roslyn
         {
             services.AddSingleton<RoslynCompletionProvider>();
             services.AddSingleton<IRoslynCompletionProvider>(provider => provider.GetRequiredService<RoslynCompletionProvider>()!);
-            
             services.AddScoped<RoslynCompletionProviderController>();
             services.AddScoped<IRoslynCompletionProviderController>(provider => provider.GetRequiredService<RoslynCompletionProviderController>());
+            
             return services;
         }
     }

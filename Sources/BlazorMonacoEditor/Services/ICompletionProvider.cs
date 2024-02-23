@@ -9,7 +9,7 @@ public interface ICompletionProvider
 
     Task<string> GetLanguage();
     
-    Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position caretPosition, int caretOffset);
+    Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, MonacoPosition caretPosition, int caretOffset);
     
     Task<CompletionItem> ResolveCompletionItem(CompletionItem item);
 }

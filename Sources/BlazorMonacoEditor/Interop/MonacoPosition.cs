@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace BlazorMonacoEditor.Interop;
 
-public readonly record struct Position
+public readonly record struct MonacoPosition
 {
     /// <summary>
     /// Line number (starts at 1).

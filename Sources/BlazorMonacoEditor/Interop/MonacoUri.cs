@@ -52,4 +52,15 @@ public sealed record MonacoUri
         }
         return new Uri($"{Scheme}://{Authority}{Path}");
     }
+
+    public static MonacoUri FromUri(Uri uri)
+    {
+        return new MonacoUri()
+        {
+            Scheme = uri.Scheme,
+            Authority = uri.Authority,
+            Path = uri.PathAndQuery,
+            Fragment = uri.Fragment
+        };
+    }
 }

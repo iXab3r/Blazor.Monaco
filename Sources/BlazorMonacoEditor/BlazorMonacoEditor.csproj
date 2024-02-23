@@ -16,6 +16,7 @@
         <PackageReference Include="Microsoft.CodeAnalysis" Version="4.9.0-3.23629.3" />
         <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.0" />
         <PackageReference Include="System.Reactive" Version="6.0.0" />
+        <PackageReference Include="StronglyTypedId" Version="1.0.0-beta07"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -40,10 +41,6 @@
             <CopyToOutputDirectory>Never</CopyToOutputDirectory>
             <CopyToPublishDirectory>Never</CopyToPublishDirectory>
         </Content>
-    </ItemGroup>
-
-    <ItemGroup>
-      <ProjectReference Include="..\PoeShared\PoeShared.csproj" />
     </ItemGroup>
 
     <Target Name="NPMInstall" AfterTargets="PreBuildEvent">

@@ -2,14 +2,14 @@ using System.Text.Json.Serialization;
 
 namespace BlazorMonacoEditor.Interop;
 
-public sealed record SingleEditOperation
+public record SingleEditOperation
 {
     /// <summary>
     /// The range to replace. This can be empty to emulate a simple insert.
     /// </summary>
     [JsonPropertyName("range")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public Range? Range { get; set; }
+    public MonacoRange? Range { get; set; }
 
     /// <summary>
     /// The text to replace with. This can be null to emulate a simple delete.

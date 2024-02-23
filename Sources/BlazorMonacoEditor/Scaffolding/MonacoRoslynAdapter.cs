@@ -1,6 +1,5 @@
 using BlazorMonacoEditor.Interop;
 using Microsoft.CodeAnalysis.Text;
-using Range = BlazorMonacoEditor.Interop.Range;
 
 namespace BlazorMonacoEditor.Scaffolding;
 
@@ -24,7 +23,7 @@ internal sealed class MonacoRoslynAdapter
         return sourceText.WithChanges(new TextChange(span, newText));
     }
 
-    private TextSpan GetTextSpanFromRange(SourceText sourceText, Range range)
+    private TextSpan GetTextSpanFromRange(SourceText sourceText, MonacoRange range)
     {
         var start = GetPosition(sourceText, range.StartLineNumber, range.StartColumn);
         var end = GetPosition(sourceText, range.EndLineNumber, range.EndColumn);

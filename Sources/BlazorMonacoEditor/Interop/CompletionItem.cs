@@ -81,7 +81,7 @@ public sealed record CompletionItem
     /// </summary>
     [JsonPropertyName("range")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public Range? Range { get; set; } // Can be IRange or CompletionItemRanges
+    public MonacoRange? Range { get; set; } // Can be IRange or CompletionItemRanges
 
     /// <summary>
     /// An optional set of characters that accept this completion when pressed.
@@ -102,5 +102,5 @@ public sealed record CompletionItem
     /// </summary>
     [JsonPropertyName("command")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public Command? Command { get; set; }
+    public MonacoCommand? Command { get; set; }
 }

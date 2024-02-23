@@ -31,7 +31,7 @@ internal sealed class CompletionProviderFacade : IAsyncDisposable, ICompletionPr
     }
 
     [JSInvokable]
-    public async Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position position, int caretOffset)
+    public async Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, MonacoPosition position, int caretOffset)
     {
         var result = await completionProvider.ProvideCompletionItems(modelUri, completionContext, position, caretOffset);
         return result;

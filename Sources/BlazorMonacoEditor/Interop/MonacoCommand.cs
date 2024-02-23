@@ -1,8 +1,9 @@
+using System;
 using System.Text.Json.Serialization;
 
 namespace BlazorMonacoEditor.Interop;
 
-public sealed record Command
+public sealed record MonacoCommand
 {
     /// <summary>
     /// The identifier of the command.

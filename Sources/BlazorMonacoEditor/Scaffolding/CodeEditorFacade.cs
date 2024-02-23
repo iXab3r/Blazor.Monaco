@@ -18,7 +18,7 @@ namespace BlazorMonacoEditor.Scaffolding
         /// </summary>
         /// <param name="id">The editor ID.</param>
         /// <param name="interop">The shared monaco interop wrapper.</param>
-        public CodeEditorFacade(string id, MonacoInterop interop)
+        public CodeEditorFacade(MonacoEditorId id, MonacoInterop interop)
         {
             Id = id;
             this.interop = interop;
@@ -29,7 +29,7 @@ namespace BlazorMonacoEditor.Scaffolding
         /// <summary>
         /// Gets the generated id of the editor.
         /// </summary>
-        public string Id { get; }
+        public MonacoEditorId Id { get; }
         
         public EditorOptions? Options { get; private set; }
         
@@ -39,7 +39,7 @@ namespace BlazorMonacoEditor.Scaffolding
             {
                 return;
             }
-            await interop.UpdateOptions(this, options);
+            await interop.UpdateOptions(Id, options);
             Options = options;
         }
 
@@ -65,7 +65,7 @@ namespace BlazorMonacoEditor.Scaffolding
             {
                 return;
             }
-            await interop.DisposeEditor(this);
+            await interop.DisposeEditor(Id);
         }
     }
 }

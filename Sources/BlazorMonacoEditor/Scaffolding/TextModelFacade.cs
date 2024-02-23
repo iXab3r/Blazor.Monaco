@@ -61,7 +61,7 @@ namespace BlazorMonacoEditor.Scaffolding
         {
             modelContentChangesSink.OnNext(args);
         }
-        
+
         /// <summary>
         /// Sets the content of the text model.
         /// </summary>
@@ -70,7 +70,7 @@ namespace BlazorMonacoEditor.Scaffolding
         public async ValueTask SetContent(string content)
         {
             InitialText = content;
-            await interop.SetModelContent(this, content);
+            await interop.SetModelContent(this.Uri, content);
             Text = content;
         }
 

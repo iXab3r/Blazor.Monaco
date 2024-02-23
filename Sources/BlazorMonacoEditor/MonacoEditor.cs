@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
 using System.Threading;
@@ -7,7 +8,6 @@ using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Scaffolding;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging;
-using PoeShared.Services;
 
 namespace BlazorMonacoEditor;
 
@@ -19,12 +19,13 @@ partial class MonacoEditor : IAsyncDisposable
     /// Reason of using observable for it is that Render and Parameters events could be called simultaneously
     /// </summary>
     private readonly Subject<string> updateSink = new();
+    private readonly ITextModel fallbackTextModel = new TextModel();
+    private readonly Dictionary<TextModelId, ITextModel> textModelById = new();
+    private readonly Dictionary<TextModelId, TextModelFacade> textModelFacadeById = new();
     
     private ElementReference monacoContainer;
     private CodeEditorFacade? editor;
-    private TextModelFacade? currentTextModel;
-
-    public CompositeDisposable Anchors { get; } = new();
+    private TextModelFacade? activeModel;
 
     [Parameter] public ITextModel? TextModel { get; set; }
 
@@ -46,22 +47,28 @@ partial class MonacoEditor : IAsyncDisposable
 
     [Parameter] public EventCallback<bool> ShowCodeMapChanged { get; set; }
     
+    public CompositeDisposable Anchors { get; } = new();
+    
+    public MonacoEditorId Id { get; }
+
+    public MonacoEditor()
+    {
+        var editorId = $"Monaco-{Guid.NewGuid().ToString().Replace("-", "")}";
+        Id = new MonacoEditorId(editorId);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             Logger.LogDebug("First Render");
-            editor = await MonacoInterop.CreateEditor(monacoContainer);
+
+            editor = await MonacoInterop.CreateEditor(monacoContainer, Id);
             Logger.LogDebug("Editor Created");
 
             Anchors.Add(updateSink.SubscribeAsync(UpdateEditor));
             updateSink.OnNext("OnAfterRenderAsync");
         }
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        await base.OnInitializedAsync();
     }
 
     protected override async Task OnParametersSetAsync()
@@ -80,46 +87,63 @@ partial class MonacoEditor : IAsyncDisposable
 
         Logger.LogDebug($"Updating editor, reason: {reason}");
         
-        var textModel = TextModel ?? new TextModel();
-        var modelUri = new Uri($"inmemory://{editor.Id}/{textModel.Path}");
-        var differentUri = !string.Equals(modelUri.ToString(), currentTextModel?.Uri.ToString());
-
-        if (currentTextModel == null || differentUri)
+        var textModel = TextModel ?? fallbackTextModel;
+        textModelById.TryAdd(textModel.Id, textModel);
+        var textModelFacade = await GetOrCreate(textModel, cancellationToken);
+        
+        var differentUri = activeModel == null || !Equals(activeModel.Uri, textModelFacade.Uri);
+        if (differentUri)
         {
-            if (currentTextModel != null)
-            {
-                await currentTextModel.DisposeAsync();
-            }
-
-            Logger.LogDebug($"Requesting text from text model: {textModel}");
-            var actualText = await textModel.GetTextAsync(cancellationToken);
-
-            currentTextModel = await MonacoInterop.CreateTextModel(modelUri, string.Empty, LanguageId ?? string.Empty);
-            Logger.LogDebug($"Created model: {currentTextModel}");
-            await editor.SetModel(currentTextModel);
-            await currentTextModel.SetContent(actualText.ToString());
-
-            var modelSubscription = currentTextModel
-                .WhenModelContentChanged
-                .SubscribeAsync(async (x, token) =>
-                {
-                    try
-                    {
-                        var currentText = await textModel.GetTextAsync(token);
-                        var updatedText = roslynAdapter.ApplyChanges(currentText, x);
-                        await textModel.SetTextAsync(updatedText, token);
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.LogError($"Failed to apply changes to text model {textModel}", e);
-                        throw;
-                    }
-                });
-            currentTextModel.Anchors.Add(modelSubscription);
+            activeModel = textModelFacade;
+            await editor.SetModel(textModelFacade);
         }
 
         await UpdateOptionsIfNeeded();
         Logger.LogDebug($"Update completed, reason: {reason}");
+    }
+
+    private async Task<TextModelFacade> GetOrCreate(ITextModel textModel, CancellationToken cancellationToken)
+    {
+        if (editor == null)
+        {
+            throw new InvalidOperationException("Editor must be created at this point");
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (textModelFacadeById.TryGetValue(textModel.Id, out var modelFacade))
+        {
+            return modelFacade;
+        }
+
+        var modelUri = new Uri($"inmemory://{editor.Id}/{textModel.Id}");
+        Logger.LogDebug($"Creating new facade for text model @ {modelUri}: {textModel}");
+        var textModelFacade = await MonacoInterop.CreateTextModel(modelUri, string.Empty, LanguageId ?? string.Empty);
+        Logger.LogDebug($"Created model: {textModelFacade}");
+
+        var actualText = await textModel.GetTextAsync(cancellationToken);
+        await textModelFacade.SetContent(actualText.ToString());
+        
+        var modelSubscription = textModelFacade
+            .WhenModelContentChanged
+            .SubscribeAsync(async (x, token) =>
+            {
+                try
+                {
+                    var currentText = await textModel.GetTextAsync(token);
+                    var updatedText = roslynAdapter.ApplyChanges(currentText, x);
+                    await textModel.SetTextAsync(updatedText, token);
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError($"Failed to apply changes to text model {textModel}", e);
+                    throw;
+                }
+            });
+        textModelFacade.Anchors.Add(modelSubscription);
+         
+        textModelFacadeById[textModel.Id] = textModelFacade;
+        return textModelFacade;
     }
 
     private async Task UpdateOptionsIfNeeded()
@@ -133,6 +157,7 @@ partial class MonacoEditor : IAsyncDisposable
         {
             LineNumbers = ShowLineNumbers ? "on" : "off",
             LineNumbersMinChars = LineNumbersMinChars,
+            GlyphMargin = true,
             ReadOnly = IsReadOnly,
             Minimap = new EditorMinimapOptions()
             {
@@ -155,9 +180,9 @@ partial class MonacoEditor : IAsyncDisposable
             await editor.DisposeAsync();
         }
 
-        if (currentTextModel != null)
+        foreach (var textModelFacade in textModelFacadeById.Values)
         {
-            await currentTextModel.DisposeAsync();
+            await textModelFacade.DisposeAsync();
         }
     }
 }

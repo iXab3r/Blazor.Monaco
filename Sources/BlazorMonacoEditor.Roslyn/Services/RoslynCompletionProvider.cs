@@ -104,7 +104,7 @@ public sealed class RoslynCompletionProvider : IRoslynCompletionProvider
         return null;
     }
 
-    public async Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, Position caretPosition, int caretOffset)
+    public async Task<CompletionList?> ProvideCompletionItems(MonacoUri modelUri, CompletionContext completionContext, MonacoPosition caretPosition, int caretOffset)
     {
         var revision = Interlocked.Increment(ref completionRevision);
         var documentUri = modelUri.ToUriOrDefault();
