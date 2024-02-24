@@ -17,6 +17,12 @@ self.MonacoEnvironment = {
     }
 };
 
+interface IMonacoActionArgs{
+    modelUri: monaco.Uri,
+    caretPosition: monaco.IPosition,
+    caretOffset: number
+}
+
 class MonacoInterop {
 
     private static instance: MonacoInterop;
@@ -197,7 +203,20 @@ class MonacoInterop {
         }
         return editorCtxt;
     }
-
+    
+    async addEditorAction(actionDescriptor: monaco.editor.IActionDescriptor, blazorCallback: IBlazorInteropObject){
+        const action = this.prepareActionDescriptor(actionDescriptor, blazorCallback);
+        this.logger.debug(`Adding new action: ${JSON.stringify(actionDescriptor)}`);
+        return monaco.editor.addEditorAction(action);
+    }
+    
+    async addAction(editorId: string, actionDescriptor: monaco.editor.IActionDescriptor, blazorCallback: IBlazorInteropObject){
+        const editor = this.getEditorById(editorId);
+        const action = this.prepareActionDescriptor(actionDescriptor, blazorCallback);
+        this.logger.debug(`Adding new action to editor ${editorId}: ${JSON.stringify(actionDescriptor)}`);
+        return editor.codeEditor.addAction(action);
+    }
+    
     async registerCodeActionProvider(blazorCallback: IBlazorInteropObject) {
         this.logger.debug(`Registering new code action provider: ${blazorCallback}`);
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
@@ -308,6 +327,22 @@ class MonacoInterop {
             signatureHelpTriggerCharacters: triggerCharacters,
             signatureHelpRetriggerCharacters: retriggerCharacters
         });
+    }
+
+    prepareActionDescriptor(actionDescriptor: monaco.editor.IActionDescriptor, blazorCallback: IBlazorInteropObject){
+        const action = actionDescriptor;
+        action.run = async (editor: monaco.editor.ICodeEditor) => {
+            let model = editor.getModel();
+            const caretPosition = editor.getPosition();
+            const caretOffset = model.getOffsetAt(caretPosition);
+            const args: IMonacoActionArgs = {
+                modelUri:  model.uri,
+                caretPosition: caretPosition,
+                caretOffset: caretOffset
+            };
+            await blazorCallback.invokeMethodAsync("HandleExecuted", args);
+        };
+        return action;
     }
 }
 

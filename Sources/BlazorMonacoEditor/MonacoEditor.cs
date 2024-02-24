@@ -13,6 +13,7 @@ namespace BlazorMonacoEditor;
 
 partial class MonacoEditor : IAsyncDisposable
 {
+    private static long editorIdx = 0;
     private readonly MonacoRoslynAdapter roslynAdapter = new();
     
     /// <summary>
@@ -53,7 +54,7 @@ partial class MonacoEditor : IAsyncDisposable
 
     public MonacoEditor()
     {
-        var editorId = $"Monaco-{Guid.NewGuid().ToString().Replace("-", "")}";
+        var editorId = $"monaco-{Interlocked.Increment(ref editorIdx)}";
         Id = new MonacoEditorId(editorId);
     }
 

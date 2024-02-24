@@ -22,4 +22,8 @@ public interface IMonacoInterop
     ValueTask SetModelDecorations(MonacoEditorId editorId, ModelDeltaDecoration[] decorations);
 
     ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IdentifiedSingleEditOperation[] operations);
+
+    ValueTask InvokeVoidAsync(string methodName, params object[] args);
+    
+    ValueTask<T> InvokeAsync<T>(string methodName, params object[] args);
 }
