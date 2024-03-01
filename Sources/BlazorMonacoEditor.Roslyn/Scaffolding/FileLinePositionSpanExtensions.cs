@@ -7,6 +7,10 @@ public static class FileLinePositionSpanExtensions
 {
     public static FileLinePositionSpan ToMonacoFileLinePositionSpan(this FileLinePositionSpan fileLinePositionSpan)
     {
+        if (string.IsNullOrEmpty(fileLinePositionSpan.Path))
+        {
+            return default;
+        }
         return new FileLinePositionSpan(
             path: fileLinePositionSpan.Path,
             new LinePosition(fileLinePositionSpan.StartLinePosition.Line + 1, fileLinePositionSpan.StartLinePosition.Character + 1),
