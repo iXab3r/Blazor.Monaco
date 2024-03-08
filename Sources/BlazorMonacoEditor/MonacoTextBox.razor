@@ -1,0 +1,67 @@
+﻿@using System.Reflection.Metadata
+@using System.Threading
+@using BlazorMonacoEditor.Scaffolding
+@using Microsoft.CodeAnalysis.Text
+
+<MonacoEditor
+    TextModel="@textModel"
+    LanguageId="@LanguageId"
+    LineNumbersMinChars="1"
+    IsReadOnly="@IsReadOnly"
+    ShowLineNumbers="@ShowLineNumbers"
+    ShowCodeMap="@ShowCodeMap"/>
+
+@code {
+
+    private readonly ImmediateTextModel textModel;
+
+    [Parameter] public bool IsReadOnly { get; set; }
+    [Parameter] public string? LanguageId { get; set; }
+    [Parameter] public bool ShowLineNumbers { get; set; } = false;
+    [Parameter] public bool ShowCodeMap { get; set; } = false;
+
+    [Parameter] public string? Text { get; set; }
+    [Parameter] public EventCallback<string?> TextChanged { get; set; }
+
+    public MonacoTextBox()
+    {
+        textModel = new ImmediateTextModel(this);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await textModel.SetTextAsync(SourceText.From(Text ?? string.Empty));
+        await base.OnParametersSetAsync();
+    }
+
+    private sealed class ImmediateTextModel :  ITextModel
+    {
+        private readonly MonacoTextBox owner;
+
+        public ImmediateTextModel(MonacoTextBox owner)
+        {
+            this.owner = owner;
+        }
+
+        public SourceText Text { get; set; } = SourceText.From("");
+
+        public TextModelId Id { get; } = new($"TextBox-{Guid.NewGuid()}");
+    
+        public string Path { get; init; } = "";
+    
+        public async Task<SourceText> GetTextAsync(CancellationToken cancellationToken = default)
+        {
+            return Text ?? SourceText.From("");
+        }
+
+        public async Task SetTextAsync(SourceText sourceText, CancellationToken cancellationToken = default)
+        {
+            Text = sourceText;
+            var text = sourceText.ToString();
+            if (!string.Equals(text, owner.Text))
+            {
+                await owner.TextChanged.InvokeAsync(text);
+            }
+        }
+    }
+}
