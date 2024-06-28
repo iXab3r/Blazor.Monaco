@@ -56,7 +56,7 @@ public sealed class MonacoActionFacade : IAsyncDisposable
     
     public async ValueTask DisposeAsync()
     {
-        await Anchor.DisposeAsync();
-        ObjectReference.Dispose();
+        await Anchor.DisposeJsSafeAsync();
+        ObjectReference.DisposeJsSafe();
     }
 }

@@ -176,15 +176,15 @@ partial class MonacoEditor : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        Anchors.Dispose();
+        Anchors.DisposeJsSafe();
         if (editor != null)
         {
-            await editor.DisposeAsync();
+            await editor.DisposeJsSafeAsync();
         }
 
         foreach (var textModelFacade in textModelFacadeById.Values)
         {
-            await textModelFacade.DisposeAsync();
+            await textModelFacade.DisposeJsSafeAsync();
         }
     }
 }

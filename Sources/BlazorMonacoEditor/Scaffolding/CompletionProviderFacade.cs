@@ -45,6 +45,6 @@ internal sealed class CompletionProviderFacade : IAsyncDisposable, ICompletionPr
 
     public async ValueTask DisposeAsync()
     {
-        ObjectReference.Dispose();
+        ObjectReference.DisposeJsSafe();
     }
 }

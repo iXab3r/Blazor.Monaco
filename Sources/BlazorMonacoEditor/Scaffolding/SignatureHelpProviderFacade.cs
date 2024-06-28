@@ -45,6 +45,6 @@ internal sealed class SignatureHelpProviderFacade : IAsyncDisposable, ISignature
 
     public async ValueTask DisposeAsync()
     {
-        ObjectReference.Dispose();
+        ObjectReference.DisposeJsSafe();
     }
 }

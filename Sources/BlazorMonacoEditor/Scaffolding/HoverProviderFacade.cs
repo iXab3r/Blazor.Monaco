@@ -33,6 +33,6 @@ internal sealed class HoverProviderFacade : IAsyncDisposable, IHoverProvider
 
     public async ValueTask DisposeAsync()
     {
-        ObjectReference.Dispose();
+        ObjectReference.DisposeJsSafe();
     }
 }

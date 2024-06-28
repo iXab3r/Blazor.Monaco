@@ -2,6 +2,7 @@
 using System.Reactive.Disposables;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
+using Microsoft.JSInterop;
 
 namespace BlazorMonacoEditor.Scaffolding
 {
@@ -70,7 +71,15 @@ namespace BlazorMonacoEditor.Scaffolding
             {
                 return;
             }
-            await interop.DisposeEditor(Id);
+
+            try
+            {
+                await interop.DisposeEditor(Id);
+            }
+            catch (JSException)
+            {
+                // During disposal ignore such errors because there is a chance that browser context is already disposed
+            }
         }
     }
 }

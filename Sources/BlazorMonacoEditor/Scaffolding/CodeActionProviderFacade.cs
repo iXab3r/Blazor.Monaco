@@ -46,6 +46,6 @@ internal sealed class CodeActionProviderFacade : IAsyncDisposable, ICodeActionPr
 
     public async ValueTask DisposeAsync()
     {
-        ObjectReference.Dispose();
+        ObjectReference.DisposeJsSafe();
     }
 }

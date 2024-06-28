@@ -80,8 +80,15 @@ namespace BlazorMonacoEditor.Scaffolding
             {
                 return;
             }
-            Anchors.Dispose();
-            await interop.DisposeModel(this);
+            Anchors.DisposeJsSafe();
+            try
+            {
+                await interop.DisposeModel(this);
+            }
+            catch (JSException)
+            {
+                // During disposal ignore such errors because there is a chance that browser context is already disposed
+            }
         }
     }
 }
