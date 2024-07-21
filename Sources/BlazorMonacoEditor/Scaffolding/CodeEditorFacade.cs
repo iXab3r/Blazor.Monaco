@@ -76,7 +76,7 @@ namespace BlazorMonacoEditor.Scaffolding
             {
                 await interop.DisposeEditor(Id);
             }
-            catch (JSException)
+            catch (Exception e) when (e is JSException or JSDisconnectedException)
             {
                 // During disposal ignore such errors because there is a chance that browser context is already disposed
             }
