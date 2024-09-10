@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
@@ -21,8 +22,10 @@ partial class MonacoEditor : IAsyncDisposable
     /// </summary>
     private readonly Subject<string> updateSink = new();
     private readonly ITextModel fallbackTextModel = new TextModel();
-    private readonly Dictionary<TextModelId, ITextModel> textModelById = new();
-    private readonly Dictionary<TextModelId, TextModelFacade> textModelFacadeById = new();
+    
+    //concurrent collections are needed as async/load process could be in async mode
+    private readonly ConcurrentDictionary<TextModelId, ITextModel> textModelById = new();
+    private readonly ConcurrentDictionary<TextModelId, TextModelFacade> textModelFacadeById = new();
     
     private ElementReference monacoContainer;
     private CodeEditorFacade? editor;
