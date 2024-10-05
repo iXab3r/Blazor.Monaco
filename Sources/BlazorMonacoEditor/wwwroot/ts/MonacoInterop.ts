@@ -52,13 +52,35 @@ class MonacoInterop {
         this.logger.debug(`Creating editor with Id ${editorId} inside ${container}, .net callback: ${blazorCallback}`);
         const newEditor = monaco.editor.create(container);
 
-        /*
-        monaco.editor.addKeybindingRule({
-            keybinding: monaco.KeyMod.CtrlCmd | monaco.KeyCode.LeftArrow,
-            command: "editor.action.quickCommand",
-            when: null,
-            commandArgs: undefined            
-        });*/
+        // Add a custom keybinding for Ctrl + D to duplicate the current line
+        newEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyD, function () {
+            const model = newEditor.getModel();
+            const selection = newEditor.getSelection();
+
+            // Get the line number at the current cursor position
+            const lineNumber = selection.positionLineNumber;
+
+            // Get the current column position of the cursor
+            const columnNumber = selection.positionColumn;
+
+            // Get the content of the current line (no extra blank line)
+            const lineContent = model.getLineContent(lineNumber);
+
+            // Define the edit operation (insert lineContent into the next line)
+            const range = new monaco.Range(lineNumber + 1, 1, lineNumber + 1, 1);
+            const textEdits = [{
+                range: range,
+                text: lineContent + '\n'
+            }];
+
+            // Push the edit operation as undoable
+            newEditor.pushUndoStop(); // Stop any previous undo group
+            newEditor.executeEdits("duplicateLine", textEdits);
+            newEditor.pushUndoStop(); // Stop the current undo group
+
+            // Move the cursor to the new duplicated line at the same column
+            newEditor.setSelection(new monaco.Selection(lineNumber + 1, columnNumber, lineNumber + 1, columnNumber));
+        });
 
         const editorContext: IEditorContext = {
             editorId: editorId,
