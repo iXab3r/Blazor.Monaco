@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
 using System.Threading;
@@ -46,6 +47,8 @@ partial class MonacoEditor : IAsyncDisposable
     [Parameter] public EventCallback<bool> ShowLineNumbersChanged { get; set; }
 
     [Parameter] public bool ShowCodeMap { get; set; }
+    
+    [Parameter] public bool AutoDetectLanguage { get; set; }
     
     [Parameter] public bool IsReadOnly { get; set; }
     
@@ -123,7 +126,19 @@ partial class MonacoEditor : IAsyncDisposable
 
         var modelUri = new Uri($"inmemory://{editor.Id}/{textModel.Id}");
         Logger.LogDebug($"Creating new facade for text model @ {modelUri}: {textModel}");
-        var textModelFacade = await MonacoInterop.CreateTextModel(modelUri, string.Empty, LanguageId ?? string.Empty);
+
+        string? language;
+        if (AutoDetectLanguage && string.IsNullOrEmpty(LanguageId))
+        {
+            language = DetectLanguage(modelUri);
+        }
+        else
+        {
+            language = LanguageId;
+        }
+        
+        Logger.LogDebug($"Creating model with language '{language}' @ {modelUri}: {textModel}");
+        var textModelFacade = await MonacoInterop.CreateTextModel(modelUri, string.Empty, language ?? string.Empty);
         Logger.LogDebug($"Created model: {textModelFacade}");
 
         var actualText = await textModel.GetTextAsync(cancellationToken);
@@ -189,5 +204,24 @@ partial class MonacoEditor : IAsyncDisposable
         {
             await textModelFacade.DisposeJsSafeAsync();
         }
+    }
+    
+    private static string DetectLanguage(System.Uri uri)
+    {
+        var extension = Path.GetExtension(uri.LocalPath)
+            .TrimStart('.')
+            .ToLowerInvariant();
+        return extension switch
+        {
+            "css" => "css",
+            "js" => "javascript", 
+            "ts" => "typescript",
+            "html" => "html",
+            "cshtml" => "razor",
+            "razor" => "razor",
+            "csx" => "csharp",
+            "cs" => "csharp",
+            _ => string.Empty
+        };
     }
 }

@@ -36,7 +36,7 @@ class MonacoInterop {
             return MonacoInterop.instance;
         }
 
-        this.logger.setLevel(logLevel.levels.TRACE);
+        this.logger.setLevel(logLevel.levels.DEBUG);
         MonacoInterop.instance = this;
         this.logger.info(`MonacoInterop instance is being created`);
         monaco.editor.setTheme('vs-dark');
@@ -137,7 +137,6 @@ class MonacoInterop {
         this.logger.debug(`Creating text model with Uri ${uri}, language: ${language}, .net callback: ${blazorCallback}`);
 
         const monacoUri = monaco.Uri.parse(uri);
-
         const model = monaco.editor.createModel(value, language, monacoUri);
 
         const modelContext: ITextModelContext = {
