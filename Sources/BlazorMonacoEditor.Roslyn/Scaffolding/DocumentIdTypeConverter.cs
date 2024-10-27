@@ -86,7 +86,7 @@ public sealed class DocumentIdTypeConverter : TypeConverter
         
         var path = Uri.TryCreate(documentIdString, UriKind.Absolute, out var documentUri) ? documentUri.AbsolutePath : documentIdString;
         var segments = path.Trim('/','\\').Split('/', '\\');
-        if (segments.Length != 2)
+        if (segments.Length < 2)
         {
             documentId = default;
             return false;

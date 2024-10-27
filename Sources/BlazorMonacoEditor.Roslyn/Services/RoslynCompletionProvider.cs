@@ -223,7 +223,7 @@ public class RoslynCompletionProvider : IRoslynCompletionProvider
 
     private DocumentCacheEntry? FindEntryByUri(Uri? documentUri)
     {
-        if (documentUri == null || documentUri.Segments.Length != 3)
+        if (documentUri == null)
         {
             return null;
         }
