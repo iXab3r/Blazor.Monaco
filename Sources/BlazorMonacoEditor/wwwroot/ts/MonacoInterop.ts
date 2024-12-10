@@ -167,6 +167,10 @@ class MonacoInterop {
         this.logger.debug(`Disposed text model with Uri ${textModelUri}, id: ${modelCtxt.textModel.id}`);
     }
 
+    executeModelEdits(textModelUri: string, edits: monaco.editor.IIdentifiedSingleEditOperation[]) {
+        const modelCtxt = this.getTextModelByUri(textModelUri);
+        modelCtxt.textModel.pushEditOperations(null, edits, () => null);
+    }
 
     setModelMarkers(textModelUri: string, owner: string, markers: monaco.editor.IMarkerData[]) {
         const modelCtxt = this.getTextModelByUri(textModelUri);

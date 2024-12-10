@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Scaffolding;
@@ -15,13 +16,13 @@ public interface IMonacoInterop
 
     ValueTask<IAsyncDisposable> RegisterSignatureHelpProvider(ISignatureHelpProvider signatureHelpProvider);
 
-    ValueTask SetModelMarkers(Uri modelUri, string markersOwner, MarkerData[] markers);
+    ValueTask SetModelMarkers(Uri modelUri, string markersOwner, IReadOnlyList<MarkerData> markers);
 
     ValueTask SetModelContent(Uri modelUri, string newContent);
 
-    ValueTask SetModelDecorations(MonacoEditorId editorId, ModelDeltaDecoration[] decorations);
+    ValueTask SetModelDecorations(MonacoEditorId editorId, IReadOnlyList<ModelDeltaDecoration> decorations);
 
-    ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IdentifiedSingleEditOperation[] operations);
+    ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IReadOnlyList<IdentifiedSingleEditOperation> operations);
 
     ValueTask InvokeVoidAsync(string methodName, params object[] args);
     

@@ -1,14 +1,17 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reactive.Disposables;
+using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
+using BlazorMonacoEditor.Roslyn;
 using BlazorMonacoEditor.Scaffolding;
 using Microsoft.AspNetCore.Components;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 namespace BlazorMonacoEditor;
@@ -26,11 +29,11 @@ partial class MonacoEditor : IAsyncDisposable
     
     //concurrent collections are needed as async/load process could be in async mode
     private readonly ConcurrentDictionary<TextModelId, ITextModel> textModelById = new();
-    private readonly ConcurrentDictionary<TextModelId, TextModelFacade> textModelFacadeById = new();
+    private readonly ConcurrentDictionary<TextModelId, MonacoTextModelFacade> textModelFacadeById = new();
     
     private ElementReference monacoContainer;
     private CodeEditorFacade? editor;
-    private TextModelFacade? activeModel;
+    private MonacoTextModelFacade? activeModel;
 
     [Parameter] public ITextModel? TextModel { get; set; }
 
@@ -85,7 +88,7 @@ partial class MonacoEditor : IAsyncDisposable
         updateSink.OnNext("OnParametersSetAsync");
     }
 
-    private async Task UpdateEditor( string reason, CancellationToken cancellationToken = default)
+    private async Task UpdateEditor(string reason, CancellationToken cancellationToken = default)
     {
         if (editor == null)
         {
@@ -95,22 +98,22 @@ partial class MonacoEditor : IAsyncDisposable
 
         Logger.LogDebug($"Updating editor, reason: {reason}");
         
-        var textModel = TextModel ?? fallbackTextModel;
-        textModelById.TryAdd(textModel.Id, textModel);
-        var textModelFacade = await GetOrCreate(textModel, cancellationToken);
+        var localModel = TextModel ?? fallbackTextModel;
+        textModelById.TryAdd(localModel.Id, localModel);
+        var remoteModel = await GetOrCreateRemoteModel(localModel, cancellationToken);
         
-        var differentUri = activeModel == null || !Equals(activeModel.Uri, textModelFacade.Uri);
+        var differentUri = activeModel == null || !Equals(activeModel.Uri, remoteModel.Uri);
         if (differentUri)
         {
-            activeModel = textModelFacade;
-            await editor.SetModel(textModelFacade);
+            activeModel = remoteModel;
+            await editor.SetModel(remoteModel);
         }
 
         await UpdateOptionsIfNeeded();
         Logger.LogDebug($"Update completed, reason: {reason}");
     }
 
-    private async Task<TextModelFacade> GetOrCreate(ITextModel textModel, CancellationToken cancellationToken)
+    private async Task<MonacoTextModelFacade> GetOrCreateRemoteModel(ITextModel localModel, CancellationToken cancellationToken)
     {
         if (editor == null)
         {
@@ -119,13 +122,13 @@ partial class MonacoEditor : IAsyncDisposable
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (textModelFacadeById.TryGetValue(textModel.Id, out var modelFacade))
+        if (textModelFacadeById.TryGetValue(localModel.Id, out var modelFacade))
         {
             return modelFacade;
         }
 
-        var modelUri = new Uri($"inmemory://{editor.Id}/{textModel.Id}");
-        Logger.LogDebug($"Creating new facade for text model @ {modelUri}: {textModel}");
+        var modelUri = new Uri($"inmemory://{editor.Id}/{localModel.Id}");
+        Logger.LogDebug($"Creating new remote(Monaco) facade for local text model @ {modelUri}: {localModel}");
 
         string? language;
         if (AutoDetectLanguage && string.IsNullOrEmpty(LanguageId))
@@ -137,33 +140,56 @@ partial class MonacoEditor : IAsyncDisposable
             language = LanguageId;
         }
         
-        Logger.LogDebug($"Creating model with language '{language}' @ {modelUri}: {textModel}");
-        var textModelFacade = await MonacoInterop.CreateTextModel(modelUri, string.Empty, language ?? string.Empty);
-        Logger.LogDebug($"Created model: {textModelFacade}");
+        Logger.LogDebug($"Creating model with language '{language}' @ {modelUri}: {localModel}");
+        var actualText = await localModel.GetTextAsync(cancellationToken);
+        var remoteModel = await MonacoInterop.CreateTextModel(modelUri, actualText, language ?? string.Empty);
 
-        var actualText = await textModel.GetTextAsync(cancellationToken);
-        await textModelFacade.SetContent(actualText.ToString());
-        
-        var modelSubscription = textModelFacade
-            .WhenModelContentChanged
+        var remoteTextContainer = remoteModel.Text.Container;
+        var remoteTextChangesSubscription = Observable.FromEventPattern<TextChangeEventArgs>(
+            h => remoteTextContainer.TextChanged += h,
+            h => remoteTextContainer.TextChanged -= h
+        )
+        .SubscribeAsync(async (x, token) =>
+        {
+            if (x.EventArgs.Changes.Count <= 0)
+            {
+                return;
+            }
+            
+            await localModel.SetTextAsync(x.EventArgs.NewText, cancellationToken);
+        });
+        remoteModel.Anchors.Add(remoteTextChangesSubscription);
+
+        Logger.LogDebug($"Created remote(Monaco) model: {remoteModel}");
+        var localModelChangesSubscription = localModel
+            .WhenChanged
             .SubscribeAsync(async (x, token) =>
             {
                 try
                 {
-                    var currentText = await textModel.GetTextAsync(token);
-                    var updatedText = roslynAdapter.ApplyChanges(currentText, x);
-                    await textModel.SetTextAsync(updatedText, token);
+                    var localText = await localModel.GetTextAsync(token);
+                    var remoteText = remoteModel.Text;
+                    if (localText.ContentEquals(remoteText))
+                    {
+                        return;
+                    }
+                    
+                    var monacoChanges = RoslynChangesAdaptor.PrepareDiff(oldText: remoteText, newText: localText);
+                    if (monacoChanges.Any())
+                    {
+                        await MonacoInterop.ExecuteModelEdits(remoteModel.Uri, monacoChanges);
+                    }
                 }
                 catch (Exception e)
                 {
-                    Logger.LogError($"Failed to apply changes to text model {textModel}", e);
+                    Logger.LogError($"Failed to apply local changes to remote(Monaco) text model {localModel}", e);
                     throw;
                 }
             });
-        textModelFacade.Anchors.Add(modelSubscription);
+        remoteModel.Anchors.Add(localModelChangesSubscription);
          
-        textModelFacadeById[textModel.Id] = textModelFacade;
-        return textModelFacade;
+        textModelFacadeById[localModel.Id] = remoteModel;
+        return remoteModel;
     }
 
     private async Task UpdateOptionsIfNeeded()

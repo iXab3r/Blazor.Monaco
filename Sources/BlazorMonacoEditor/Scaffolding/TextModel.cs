@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Text;
@@ -13,6 +14,8 @@ public sealed class TextModel : ITextModel
     
     public string Path { get; init; } = "";
     
+    public IObservable<EventArgs> WhenChanged { get; } = Observable.Never<EventArgs>();
+
     public async Task<SourceText> GetTextAsync(CancellationToken cancellationToken = default)
     {
         return Text ?? SourceText.From("");

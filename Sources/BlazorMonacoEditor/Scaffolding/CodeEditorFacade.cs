@@ -55,7 +55,7 @@ namespace BlazorMonacoEditor.Scaffolding
         /// </summary>
         /// <param name="model">The text model to change to.</param>
         /// <returns>A completion task.</returns>
-        public async ValueTask SetModel(TextModelFacade model)
+        public async ValueTask SetModel(MonacoTextModelFacade model)
         {
             if (model is null)
             {

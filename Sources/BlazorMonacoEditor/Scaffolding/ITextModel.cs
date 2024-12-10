@@ -9,6 +9,7 @@ public interface ITextModel
 {
     TextModelId Id { get; }
     string Path { get; }
+    IObservable<EventArgs> WhenChanged { get; }
     Task<SourceText> GetTextAsync(CancellationToken cancellationToken = default);
     Task SetTextAsync(SourceText sourceText, CancellationToken cancellationToken = default);
 }

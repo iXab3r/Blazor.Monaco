@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reactive.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Scaffolding;
@@ -14,6 +15,8 @@ public sealed class RoslynTextModel : ITextModel
     public TextModelId Id => new($"{DocumentId.ProjectId.Id}/{DocumentId.Id}");
     
     public required string Path { get; init; }
+    
+    public IObservable<EventArgs> WhenChanged { get; } = Observable.Never<EventArgs>();
 
     public required DocumentId DocumentId { get; init; }
     

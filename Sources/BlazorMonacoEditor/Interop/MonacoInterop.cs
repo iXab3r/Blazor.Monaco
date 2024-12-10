@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using BlazorMonacoEditor.Scaffolding;
 using BlazorMonacoEditor.Services;
 using Microsoft.AspNetCore.Components;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
@@ -53,19 +54,19 @@ namespace BlazorMonacoEditor.Interop
         /// <param name="value">The value of the model (i.e. content of the file).</param>
         /// <param name="languageId">The language ID for the file.</param>
         /// <returns>A text model.</returns>
-        public async ValueTask<TextModelFacade> CreateTextModel(Uri uri, string value, string languageId = null)
+        public async ValueTask<MonacoTextModelFacade> CreateTextModel(Uri uri, SourceText value, string languageId = null)
         {
             if (uri is null)
             {
                 throw new ArgumentNullException(nameof(uri));
             }
 
-            var textModel = new TextModelFacade(uri, value, this)
+            var textModel = new MonacoTextModelFacade(uri, value, this)
             {
                 LanguageId = languageId,
             };
 
-            await InvokeVoidAsync("createTextModel", textModel.Uri.ToString(), textModel.InitialText, textModel.ObjectReference, textModel.LanguageId);
+            await InvokeVoidAsync("createTextModel", textModel.Uri.ToString(), textModel.InitialText.ToString(), textModel.ObjectReference, textModel.LanguageId);
 
             return textModel;
         }
@@ -118,9 +119,14 @@ namespace BlazorMonacoEditor.Interop
             await InvokeVoidAsync("updateEditorOptions", editorId, options);
         }
         
-        public async ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IdentifiedSingleEditOperation[] operations)
+        public async ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IReadOnlyList<IdentifiedSingleEditOperation> operations)
         {
             await InvokeVoidAsync("executeEditorEdits", editorId, editSource, operations);
+        }
+        
+        public async ValueTask ExecuteModelEdits(Uri modelUri, IReadOnlyList<IdentifiedSingleEditOperation> operations)
+        {
+            await InvokeVoidAsync("executeModelEdits", modelUri.ToString(), operations);
         }
 
         /// <summary>
@@ -128,7 +134,7 @@ namespace BlazorMonacoEditor.Interop
         /// </summary>
         /// <param name="model">The text model to update.</param>
         /// <returns>Completion task.</returns>
-        public async ValueTask DisposeModel(TextModelFacade model)
+        public async ValueTask DisposeModel(MonacoTextModelFacade model)
         {
             if (model is null)
             {
@@ -157,10 +163,7 @@ namespace BlazorMonacoEditor.Interop
         /// <summary>
         /// Sets the markers of a given model.
         /// </summary>
-        /// <param name="modelUri">The text model to update.</param>
-        /// <param name="newContent">The new content of the file.</param>
-        /// <returns>Completion task.</returns>
-        public async ValueTask SetModelMarkers(Uri modelUri, string markersOwner, MarkerData[] markers)
+        public async ValueTask SetModelMarkers(Uri modelUri, string markersOwner, IReadOnlyList<MarkerData> markers)
         {
             if (modelUri is null)
             {
@@ -170,7 +173,7 @@ namespace BlazorMonacoEditor.Interop
             await InvokeVoidAsync("setModelMarkers", modelUri.ToString(), markersOwner, markers);
         } 
         
-        public async ValueTask SetModelDecorations(MonacoEditorId editorId, ModelDeltaDecoration[] decorations)
+        public async ValueTask SetModelDecorations(MonacoEditorId editorId, IReadOnlyList<ModelDeltaDecoration> decorations)
         {
             await InvokeVoidAsync("setModelDecorations", editorId.ToString(), decorations);
         }
