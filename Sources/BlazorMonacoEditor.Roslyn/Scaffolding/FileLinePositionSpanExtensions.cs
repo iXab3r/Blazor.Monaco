@@ -7,12 +7,9 @@ public static class FileLinePositionSpanExtensions
 {
     public static FileLinePositionSpan ToMonacoFileLinePositionSpan(this FileLinePositionSpan fileLinePositionSpan)
     {
-        if (string.IsNullOrEmpty(fileLinePositionSpan.Path))
-        {
-            return default;
-        }
         return new FileLinePositionSpan(
-            path: fileLinePositionSpan.Path,
+            // ReSharper disable once NullCoalescingConditionIsAlwaysNotNullAccordingToAPIContract There is a way how to make Path null, despite annotations
+            path: fileLinePositionSpan.Path ?? string.Empty,
             new LinePosition(fileLinePositionSpan.StartLinePosition.Line + 1, fileLinePositionSpan.StartLinePosition.Character + 1),
             new LinePosition(fileLinePositionSpan.EndLinePosition.Line + 1, fileLinePositionSpan.EndLinePosition.Character + 1));
     }
