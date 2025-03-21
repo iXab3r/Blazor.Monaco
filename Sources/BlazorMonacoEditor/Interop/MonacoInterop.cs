@@ -123,7 +123,37 @@ namespace BlazorMonacoEditor.Interop
         {
             await InvokeVoidAsync("executeEditorEdits", editorId, editSource, operations);
         }
+
+        public async ValueTask Focus(MonacoEditorId editorId)
+        {
+            await InvokeVoidAsync("focusEditor", editorId);
+        }
         
+        public async ValueTask FocusAtPosition(MonacoEditorId editorId, int line, int column)
+        {
+            await InvokeVoidAsync("focusEditorAtPosition", editorId, line, column);
+        }
+        
+        public async ValueTask SetSelection(MonacoEditorId editorId, MonacoRange range)
+        {
+            await InvokeVoidAsync("setEditorSelection", editorId, range);
+        }
+        
+        public async ValueTask RunEditorAction(MonacoEditorId editorId, string actionId)
+        {
+            await InvokeVoidAsync("runEditorAction", editorId, actionId);
+        }
+        
+        public async ValueTask<MonacoRange> GetSelection(MonacoEditorId editorId)
+        {
+            return await InvokeAsync<MonacoRange>("getEditorSelection", editorId);
+        }
+        
+        public async ValueTask RevealRangeInCenter(MonacoEditorId editorId, MonacoRange range)
+        {
+            await InvokeVoidAsync("revealEditorRangeInCenter", editorId, range);
+        }
+
         public async ValueTask ExecuteModelEdits(Uri modelUri, IReadOnlyList<IdentifiedSingleEditOperation> operations)
         {
             await InvokeVoidAsync("executeModelEdits", modelUri.ToString(), operations);

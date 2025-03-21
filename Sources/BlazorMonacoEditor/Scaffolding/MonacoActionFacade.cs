@@ -8,6 +8,8 @@ namespace BlazorMonacoEditor.Scaffolding;
 
 public sealed record MonacoActionArgs
 {
+    public MonacoEditorId EditorId { get; init; }
+    
     public MonacoUri ModelUri { get; init; } 
     
     public MonacoPosition CaretPosition { get; init; } 

@@ -24,6 +24,18 @@ public interface IMonacoInterop
 
     ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IReadOnlyList<IdentifiedSingleEditOperation> operations);
 
+    ValueTask Focus(MonacoEditorId editorId);
+    
+    ValueTask FocusAtPosition(MonacoEditorId editorId, int line, int column);
+
+    ValueTask RunEditorAction(MonacoEditorId editorId, string actionId);
+    
+    ValueTask<MonacoRange> GetSelection(MonacoEditorId editorId);
+    
+    ValueTask SetSelection(MonacoEditorId editorId, MonacoRange range);
+    
+    ValueTask RevealRangeInCenter(MonacoEditorId editorId, MonacoRange range);
+
     ValueTask InvokeVoidAsync(string methodName, params object[] args);
     
     ValueTask<T> InvokeAsync<T>(string methodName, params object[] args);
