@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
+        <TargetFramework>net7</TargetFramework>
         <RazorLangVersion>3.0</RazorLangVersion>
         <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
         <Nullable>enable</Nullable>
@@ -12,12 +12,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Microsoft.AspNetCore.Components" Version="6.0.25"/>
-        <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="6.0.25"/>
+        <PackageReference Include="Microsoft.AspNetCore.Components" Version="7.0.2"/>
+        <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="7.0.2"/>
         <PackageReference Include="Microsoft.CodeAnalysis" Version="4.9.0-3.23629.3" />
-        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="7.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="7.0.2" />
         <PackageReference Include="System.Reactive" Version="6.0.1" />
-        <PackageReference Include="StronglyTypedId" Version="1.0.0-beta07"/>
+        <PackageReference Include="StronglyTypedId" Version="1.0.0-beta07" PrivateAssets="all" ExcludeAssets="runtime" />
     </ItemGroup>
 
     <ItemGroup>
