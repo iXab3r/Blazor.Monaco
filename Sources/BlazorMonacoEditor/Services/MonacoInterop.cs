@@ -226,7 +226,7 @@ namespace BlazorMonacoEditor.Services
         public async ValueTask<TResult> InvokeAsync<TResult>(string methodName, params object[] args)
         {
             var moduleInterop = await GetMonacoInteropAsync();
-            return await moduleInterop.InvokeAsync<TResult>(methodName, args);
+            return await moduleInterop.InvokeAsync<TResult>(InteropPrefix + methodName, args);
         }
 
         /// <summary>
