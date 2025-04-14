@@ -4,6 +4,7 @@ using System.Reactive.Subjects;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Roslyn;
+using BlazorMonacoEditor.Services;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.JSInterop;
 

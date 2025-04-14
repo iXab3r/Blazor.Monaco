@@ -1,24 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Reactive.Disposables;
 using System.Threading.Tasks;
+using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Scaffolding;
-using BlazorMonacoEditor.Services;
 using Microsoft.AspNetCore.Components;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
-namespace BlazorMonacoEditor.Interop
+namespace BlazorMonacoEditor.Services
 {
-    /// <summary>
-    /// Main interop class for communicating with the TypeScript components.
-    /// </summary>
-    internal sealed class MonacoInterop : IMonacoInterop
+    internal sealed class MonacoInterop : IMonacoInterop, IAsyncDisposable
     {
+        private static readonly string JsUtilsFilePath = "./_content/BlazorMonacoEditor/scriptLoader.js";
+        private static readonly string MonacoInteropFilePath = "./_content/BlazorMonacoEditor/js/monaco.bundle.js";
         private const string InteropPrefix = "monacoInterop.";
-
+ 
+        private readonly Lazy<Task<IJSObjectReference>> loaderTask;
+        private readonly CompositeDisposable anchors = new();
         private readonly IJSRuntime jsRuntime;
-        private readonly ILogger logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MonacoInterop"/> class.
@@ -28,8 +29,15 @@ namespace BlazorMonacoEditor.Interop
         public MonacoInterop(IJSRuntime jsRuntime, ILoggerFactory logFactory)
         {
             this.jsRuntime = jsRuntime;
-           
-            this.logger = logFactory.CreateLogger<MonacoInterop>();
+            var jsRuntime1 = jsRuntime;
+            
+            loaderTask = new Lazy<Task<IJSObjectReference>>(async () =>
+            {
+                var module = await jsRuntime1.InvokeAsync<IJSObjectReference>("import", JsUtilsFilePath);
+                await module.InvokeVoidAsync("loadScript", MonacoInteropFilePath);
+                return module;
+            });
+            logFactory.CreateLogger<MonacoInterop>();
         }
 
         /// <summary>
@@ -215,10 +223,10 @@ namespace BlazorMonacoEditor.Interop
         /// <param name="methodName">The name of the method in the MonacoInterop TypeScript class.</param>
         /// <param name="args">Arguments to the method.</param>
         /// <returns>The result.</returns>
-        public ValueTask<TResult> InvokeAsync<TResult>(string methodName, params object[] args)
+        public async ValueTask<TResult> InvokeAsync<TResult>(string methodName, params object[] args)
         {
-            var fullname = InteropPrefix + methodName;
-            return jsRuntime.InvokeAsync<TResult>(fullname, args);
+            var moduleInterop = await GetMonacoInteropAsync();
+            return await moduleInterop.InvokeAsync<TResult>(methodName, args);
         }
 
         /// <summary>
@@ -227,10 +235,36 @@ namespace BlazorMonacoEditor.Interop
         /// <param name="methodName">The name of the method in the MonacoInterop TypeScript class.</param>
         /// <param name="args">Arguments to the method.</param>
         /// <returns>Completion task.</returns>
-        public ValueTask InvokeVoidAsync(string methodName, params object[] args)
+        public async ValueTask InvokeVoidAsync(string methodName, params object[] args)
         {
-            var fullname = InteropPrefix + methodName;
-            return jsRuntime.InvokeVoidAsync(fullname, args);
+            var moduleInterop = await GetMonacoInteropAsync();
+            await moduleInterop.InvokeVoidAsync(InteropPrefix + methodName, args);
+        }
+        
+        private async Task<IJSRuntime> GetMonacoInteropAsync()
+        {
+            EnsureNotDisposed();
+            await loaderTask.Value; //ensure that everything is loaded
+            return jsRuntime;
+        }
+
+        private void EnsureNotDisposed()
+        {
+            if (anchors.IsDisposed)
+            {
+                throw new ObjectDisposedException(nameof(MonacoInterop));
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            anchors.Dispose();
+            
+            if (loaderTask.IsValueCreated)
+            {
+                var module = await loaderTask.Value;
+                await module.DisposeAsync();
+            }
         }
     }
 }

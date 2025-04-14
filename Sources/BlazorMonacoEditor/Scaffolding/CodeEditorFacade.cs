@@ -2,6 +2,7 @@
 using System.Reactive.Disposables;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
+using BlazorMonacoEditor.Services;
 using Microsoft.JSInterop;
 
 namespace BlazorMonacoEditor.Scaffolding

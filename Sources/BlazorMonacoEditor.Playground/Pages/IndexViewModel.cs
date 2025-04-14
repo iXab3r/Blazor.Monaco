@@ -20,9 +20,8 @@ public class IndexViewModel : ReactiveObject
     private readonly List<DocumentId> documents = new();
     private readonly Dictionary<DocumentId, RoslynTextModel> textModelByDocumentId = new();
 
-    public IndexViewModel(IRoslynCompletionProviderController roslynCompletionProviderController)
+    public IndexViewModel()
     {
-        RoslynCompletionProviderController = roslynCompletionProviderController;
         Theme = KnownThemes.First();
         LanguageId = KnownLanguages.First();
         workspace = new AdhocWorkspace();
@@ -42,13 +41,8 @@ public class IndexViewModel : ReactiveObject
         var project = workspace.AddProject(ProjectInfo);
         var newDocument = AddDocument();
         DocumentId = newDocument.Id;
-        RoslynCompletionProviderController.CompletionProvider.AddWorkspace(workspace);
-        this.WhenAnyValue(x => x.DocumentId)
-            .Subscribe(x => TextModel = x == null ? null : textModelByDocumentId.GetValueOrDefault(x));
     }
     
-    public IRoslynCompletionProviderController RoslynCompletionProviderController { get; }
-
     public ProjectInfo ProjectInfo { get; }
     
     [Reactive]
