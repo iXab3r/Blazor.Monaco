@@ -143,6 +143,7 @@ partial class MonacoEditor : IAsyncDisposable
         Logger.LogDebug($"Creating model with language '{language}' @ {modelUri}: {localModel}");
         var actualText = await localModel.GetTextAsync(cancellationToken);
         var remoteModel = await MonacoInterop.CreateTextModel(modelUri, actualText, language ?? string.Empty);
+        remoteModel.Anchors.Add(Disposable.Create(() => Logger.LogDebug("Remote(Monaco) text model is being been disposed: {remoteModel}", remoteModel)));
 
         var remoteTextContainer = remoteModel.Text.Container;
         var remoteTextChangesSubscription = Observable.FromEventPattern<TextChangeEventArgs>(
@@ -187,6 +188,7 @@ partial class MonacoEditor : IAsyncDisposable
                 }
             });
         remoteModel.Anchors.Add(localModelChangesSubscription);
+        remoteModel.Anchors.Add(Disposable.Create(() => Logger.LogDebug("Remote(Monaco) text model has been disposed: {remoteModel}", remoteModel)));
          
         textModelFacadeById[localModel.Id] = remoteModel;
         return remoteModel;
