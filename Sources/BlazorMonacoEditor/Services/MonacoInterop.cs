@@ -16,7 +16,7 @@ namespace BlazorMonacoEditor.Services
         private static readonly string JsUtilsFilePath = "./_content/BlazorMonacoEditor/scriptLoader.js";
         private static readonly string MonacoInteropFilePath = "./_content/BlazorMonacoEditor/js/monaco.bundle.js";
         private const string InteropPrefix = "monacoInterop.";
- 
+
         private readonly Lazy<Task<IJSObjectReference>> loaderTask;
         private readonly CompositeDisposable anchors = new();
         private readonly IJSRuntime jsRuntime;
@@ -30,15 +30,17 @@ namespace BlazorMonacoEditor.Services
         {
             this.jsRuntime = jsRuntime;
             var jsRuntime1 = jsRuntime;
-            
+
             loaderTask = new Lazy<Task<IJSObjectReference>>(async () =>
             {
                 var module = await jsRuntime1.InvokeAsync<IJSObjectReference>("import", JsUtilsFilePath);
                 await module.InvokeVoidAsync("loadScript", MonacoInteropFilePath);
                 return module;
             });
-            logFactory.CreateLogger<MonacoInterop>();
+            Log = logFactory.CreateLogger<MonacoInterop>();
         }
+
+        public ILogger Log { get; }
 
         /// <summary>
         /// Create a new Monaco Code Editor, inside the specified HTML element.
@@ -78,35 +80,35 @@ namespace BlazorMonacoEditor.Services
 
             return textModel;
         }
-        
+
         public async ValueTask<IAsyncDisposable> RegisterCompletionProvider(ICompletionProvider completionProvider)
         {
             var facade = new CompletionProviderFacade(completionProvider);
             await InvokeVoidAsync("registerCompletionProvider", facade.ObjectReference);
             return facade;
         }
-        
+
         public async ValueTask<IAsyncDisposable> RegisterHoverProvider(IHoverProvider hoverProvider)
         {
             var facade = new HoverProviderFacade(hoverProvider);
             await InvokeVoidAsync("registerHoverProvider", facade.ObjectReference);
             return facade;
         }
-        
+
         public async ValueTask<IAsyncDisposable> RegisterCodeActionProvider(ICodeActionProvider codeActionProvider)
         {
             var facade = new CodeActionProviderFacade(codeActionProvider);
             await InvokeVoidAsync("registerCodeActionProvider", facade.ObjectReference);
             return facade;
         }
-        
+
         public async ValueTask<IAsyncDisposable> RegisterSignatureHelpProvider(ISignatureHelpProvider signatureHelpProvider)
         {
-            var facade = new SignatureHelpProviderFacade(signatureHelpProvider);
+            var facade = new SignatureHelpProviderFacade(signatureHelpProvider, Log);
             await InvokeVoidAsync("registerSignatureHelpProvider", facade.ObjectReference);
             return facade;
         }
-        
+
         public async ValueTask DisposeEditor(MonacoEditorId editorId)
         {
             await InvokeVoidAsync("disposeEditor", editorId);
@@ -115,18 +117,18 @@ namespace BlazorMonacoEditor.Services
         public async ValueTask UpdateOptions(MonacoEditorId editorId, EditorOptions options)
         {
             await InvokeVoidAsync("updateEditorOptions", editorId, options);
-        } 
-        
+        }
+
         public async ValueTask ShowCompletionDetails(MonacoEditorId editorId, bool isVisible)
         {
             await InvokeVoidAsync("setEditorCompletionDetailsVisibility", editorId, isVisible);
         }
-        
+
         public async ValueTask UpdateOptions(MonacoEditorId editorId, GlobalEditorOptions options)
         {
             await InvokeVoidAsync("updateEditorOptions", editorId, options);
         }
-        
+
         public async ValueTask ExecuteEdits(MonacoEditorId editorId, string editSource, IReadOnlyList<IdentifiedSingleEditOperation> operations)
         {
             await InvokeVoidAsync("executeEditorEdits", editorId, editSource, operations);
@@ -136,27 +138,27 @@ namespace BlazorMonacoEditor.Services
         {
             await InvokeVoidAsync("focusEditor", editorId);
         }
-        
+
         public async ValueTask FocusAtPosition(MonacoEditorId editorId, int line, int column)
         {
             await InvokeVoidAsync("focusEditorAtPosition", editorId, line, column);
         }
-        
+
         public async ValueTask SetSelection(MonacoEditorId editorId, MonacoRange range)
         {
             await InvokeVoidAsync("setEditorSelection", editorId, range);
         }
-        
+
         public async ValueTask RunEditorAction(MonacoEditorId editorId, string actionId)
         {
             await InvokeVoidAsync("runEditorAction", editorId, actionId);
         }
-        
+
         public async ValueTask<MonacoRange> GetSelection(MonacoEditorId editorId)
         {
             return await InvokeAsync<MonacoRange>("getEditorSelection", editorId);
         }
-        
+
         public async ValueTask RevealRangeInCenter(MonacoEditorId editorId, MonacoRange range)
         {
             await InvokeVoidAsync("revealEditorRangeInCenter", editorId, range);
@@ -197,7 +199,7 @@ namespace BlazorMonacoEditor.Services
 
             await InvokeVoidAsync("setModelContent", modelUri.ToString(), newContent);
         }
-        
+
         /// <summary>
         /// Sets the markers of a given model.
         /// </summary>
@@ -209,8 +211,8 @@ namespace BlazorMonacoEditor.Services
             }
 
             await InvokeVoidAsync("setModelMarkers", modelUri.ToString(), markersOwner, markers);
-        } 
-        
+        }
+
         public async ValueTask SetModelDecorations(MonacoEditorId editorId, IReadOnlyList<ModelDeltaDecoration> decorations)
         {
             await InvokeVoidAsync("setModelDecorations", editorId.ToString(), decorations);
@@ -240,7 +242,7 @@ namespace BlazorMonacoEditor.Services
             var moduleInterop = await GetMonacoInteropAsync();
             await moduleInterop.InvokeVoidAsync(InteropPrefix + methodName, args);
         }
-        
+
         private async Task<IJSRuntime> GetMonacoInteropAsync()
         {
             EnsureNotDisposed();
@@ -258,12 +260,12 @@ namespace BlazorMonacoEditor.Services
 
         public async ValueTask DisposeAsync()
         {
-            anchors.Dispose();
-            
+            anchors.DisposeJsSafe();
+
             if (loaderTask.IsValueCreated)
             {
                 var module = await loaderTask.Value;
-                await module.DisposeAsync();
+                await module.DisposeJsSafeAsync();
             }
         }
     }
