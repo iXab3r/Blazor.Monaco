@@ -20,6 +20,7 @@ namespace BlazorMonacoEditor.Services
         private readonly Lazy<Task<IJSObjectReference>> loaderTask;
         private readonly CompositeDisposable anchors = new();
         private readonly IJSRuntime jsRuntime;
+        private readonly ILoggerFactory logFactory;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MonacoInterop"/> class.
@@ -29,6 +30,7 @@ namespace BlazorMonacoEditor.Services
         public MonacoInterop(IJSRuntime jsRuntime, ILoggerFactory logFactory)
         {
             this.jsRuntime = jsRuntime;
+            this.logFactory = logFactory;
             var jsRuntime1 = jsRuntime;
 
             loaderTask = new Lazy<Task<IJSObjectReference>>(async () =>
@@ -83,7 +85,7 @@ namespace BlazorMonacoEditor.Services
 
         public async ValueTask<IAsyncDisposable> RegisterCompletionProvider(ICompletionProvider completionProvider)
         {
-            var facade = new CompletionProviderFacade(completionProvider);
+            var facade = new CompletionProviderFacade(completionProvider, logFactory);
             await InvokeVoidAsync("registerCompletionProvider", facade.ObjectReference);
             return facade;
         }
