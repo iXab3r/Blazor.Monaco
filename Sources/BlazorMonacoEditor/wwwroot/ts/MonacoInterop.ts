@@ -28,6 +28,7 @@ interface IMonacoActionArgs {
 class MonacoInterop {
 
     private static instance: MonacoInterop;
+    private static readonly DefaultThemeName = "eye-vs-dark";
     private readonly logger: logLevel.Logger = logLevel.getLogger(MonacoInterop.name);
 
     private readonly editors: { [id: string]: IEditorContext } = {};
@@ -44,7 +45,33 @@ class MonacoInterop {
         this.logger.setLevel(logLevel.levels.DEBUG);
         MonacoInterop.instance = this;
         this.logger.info(`MonacoInterop instance is being created1`);
-        monaco.editor.setTheme('vs-dark');
+        monaco.editor.defineTheme(MonacoInterop.DefaultThemeName, {
+            base: "vs-dark",
+            inherit: true,
+            rules: [
+                { token: "namespace", foreground: "5EA2FF" },
+                { token: "class", foreground: "4EC9B0" },
+                { token: "interface", foreground: "C586C0" },
+                { token: "struct", foreground: "4FC1FF" },
+                { token: "enum", foreground: "B8D7A3" },
+                { token: "typeParameter", foreground: "DCDCAA" },
+                { token: "parameter", foreground: "9CDCFE" },
+                { token: "variable", foreground: "D4D4D4" },
+                { token: "property", foreground: "9CDCFE" },
+                { token: "enumMember", foreground: "B5CEA8" },
+                { token: "event", foreground: "C586C0" },
+                { token: "method", foreground: "DCDCAA" },
+                { token: "function", foreground: "DCDCAA" },
+                { token: "keyword", foreground: "569CD6" },
+                { token: "comment", foreground: "6A9955" },
+                { token: "string", foreground: "CE9178" },
+                { token: "number", foreground: "B5CEA8" },
+                { token: "operator", foreground: "D4D4D4" },
+                { token: "variable.static", foreground: "FFD700", fontStyle: "bold" }
+            ],
+            colors: {}
+        });
+        monaco.editor.setTheme(MonacoInterop.DefaultThemeName);
     }
 
     /**
@@ -89,7 +116,7 @@ class MonacoInterop {
         this.logger.debug(`Creating diff editor with Id ${editorId} inside ${container}, .net callback: ${blazorCallback}`);
         const newEditor = monaco.editor.createDiffEditor(container, {
             automaticLayout: true,
-            theme: 'vs-dark'
+            theme: MonacoInterop.DefaultThemeName
         });
         this.logger.debug(`Created diff editor with Id ${editorId}`);
 
@@ -532,6 +559,42 @@ class MonacoInterop {
             },
             signatureHelpTriggerCharacters: triggerCharacters,
             signatureHelpRetriggerCharacters: retriggerCharacters
+        });
+    }
+
+    async registerSemanticTokensProvider(blazorCallback: IBlazorInteropObject) {
+        this.logger.debug(`Registering new semantic tokens provider: ${blazorCallback}`);
+        const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
+        const semanticLegend: monaco.languages.SemanticTokensLegend = await blazorCallback.invokeMethodAsync("GetSemanticTokensLegend");
+        this.logger.debug(
+            `Semantic tokens provider language: ${languageId}, tokenTypes: ${JSON.stringify(semanticLegend?.tokenTypes ?? [])}, tokenModifiers: ${JSON.stringify(semanticLegend?.tokenModifiers ?? [])}`
+        );
+
+        monaco.languages.registerDocumentSemanticTokensProvider(languageId, {
+            getLegend: (): monaco.languages.SemanticTokensLegend => {
+                return semanticLegend;
+            },
+            provideDocumentSemanticTokens: async (
+                model: monaco.editor.ITextModel,
+                lastResultId: string | null,
+                token: monaco.CancellationToken
+            ): Promise<monaco.languages.SemanticTokens | null> => {
+                this.logger.trace(`Semantic tokens request: ${model.uri}, lastResultId: ${lastResultId}`);
+                const semanticTokens: any = await blazorCallback.invokeMethodAsync("ProvideDocumentSemanticTokens", model.uri, lastResultId);
+                if (!semanticTokens || !semanticTokens.data) {
+                    this.logger.trace(`Semantic tokens are empty`);
+                    return null;
+                }
+
+                return {
+                    resultId: semanticTokens.resultId,
+                    data: new Uint32Array(semanticTokens.data)
+                };
+            },
+            releaseDocumentSemanticTokens: async (resultId: string | undefined): Promise<void> => {
+                const normalizedResultId = resultId ?? null;
+                await blazorCallback.invokeMethodAsync("ReleaseDocumentSemanticTokens", normalizedResultId);
+            }
         });
     }
 

@@ -13,15 +13,14 @@ namespace BlazorMonacoEditor.Services
 {
     internal sealed class MonacoInterop : IMonacoInterop, IAsyncDisposable
     {
-        private static readonly string JsUtilsFilePath = "./_content/BlazorMonacoEditor/scriptLoader.js";
-        private static readonly string MonacoInteropCacheBust = DateTime.UtcNow.Ticks.ToString();
-        private static readonly string MonacoInteropFilePath = $"./_content/BlazorMonacoEditor/js/monaco.bundle.js?v={MonacoInteropCacheBust}";
+        private const string JsUtilsFilePath = "./_content/BlazorMonacoEditor/scriptLoader.js";
         private const string InteropPrefix = "monacoInterop.";
 
         private readonly Lazy<Task<IJSObjectReference>> loaderTask;
         private readonly CompositeDisposable anchors = new();
         private readonly IJSRuntime jsRuntime;
         private readonly ILoggerFactory logFactory;
+        private readonly string monacoInteropFilePath;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MonacoInterop"/> class.
@@ -30,17 +29,25 @@ namespace BlazorMonacoEditor.Services
         /// <param name="logFactory">The logger factory.</param>
         public MonacoInterop(IJSRuntime jsRuntime, ILoggerFactory logFactory)
         {
+            Log = logFactory.CreateLogger<MonacoInterop>();
             this.jsRuntime = jsRuntime;
             this.logFactory = logFactory;
-            var jsRuntime1 = jsRuntime;
+            
+            const string defaultMonacoInteropFilePath = $"./_content/BlazorMonacoEditor/js/monaco.bundle.js";
+#if DEBUG
+            //want to ensure we'll be using new non-cached version every time to avoid hot edits
+            monacoInteropFilePath = $"{defaultMonacoInteropFilePath}?v={DateTime.UtcNow.Ticks}";
+#else
+            monacoInteropFilePath = defaultMonacoInteropFilePath;
+#endif
 
             loaderTask = new Lazy<Task<IJSObjectReference>>(async () =>
             {
-                var module = await jsRuntime1.InvokeAsync<IJSObjectReference>("import", JsUtilsFilePath);
-                await module.InvokeVoidAsync("loadScript", MonacoInteropFilePath);
+                Log.LogDebug("Loading monaco interop from {monacoInteropFilePath}", monacoInteropFilePath);
+                var module = await jsRuntime.InvokeAsync<IJSObjectReference>("import", JsUtilsFilePath);
+                await module.InvokeVoidAsync("loadScript", monacoInteropFilePath);
                 return module;
             });
-            Log = logFactory.CreateLogger<MonacoInterop>();
         }
 
         public ILogger Log { get; }
@@ -127,6 +134,13 @@ namespace BlazorMonacoEditor.Services
             return facade;
         }
 
+        public async ValueTask<IAsyncDisposable> RegisterSemanticTokensProvider(ISemanticTokensProvider semanticTokensProvider)
+        {
+            var facade = new SemanticTokensProviderFacade(semanticTokensProvider, logFactory);
+            await InvokeVoidAsync("registerSemanticTokensProvider", facade.ObjectReference);
+            return facade;
+        }
+
         public async ValueTask DisposeEditor(MonacoEditorId editorId)
         {
             await InvokeVoidAsync("disposeEditor", editorId);
@@ -203,6 +217,7 @@ namespace BlazorMonacoEditor.Services
             {
                 throw new ArgumentNullException(nameof(originalModelUri));
             }
+
             if (modifiedModelUri is null)
             {
                 throw new ArgumentNullException(nameof(modifiedModelUri));

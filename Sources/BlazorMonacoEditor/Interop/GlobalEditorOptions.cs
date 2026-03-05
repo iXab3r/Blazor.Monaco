@@ -66,12 +66,12 @@ internal sealed record GlobalEditorOptions
 
     /// <summary>
     /// Controls whether the semanticHighlighting is shown for the languages that support it.
-    /// Can be true, false, or 'configuredByTheme'.
+    /// Accepts bool values or the string 'configuredByTheme'.
     /// Defaults to 'configuredByTheme'.
     /// </summary>
     [JsonPropertyName("semanticHighlighting.enabled")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public string? SemanticHighlightingEnabled { get; init; }
+    public object? SemanticHighlightingEnabled { get; init; }
 
     /// <summary>
     /// Keep peek editors open even when double-clicking their content or when hitting `Escape`.

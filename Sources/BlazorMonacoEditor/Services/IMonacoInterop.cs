@@ -16,6 +16,8 @@ public interface IMonacoInterop
 
     ValueTask<IAsyncDisposable> RegisterSignatureHelpProvider(ISignatureHelpProvider signatureHelpProvider);
 
+    ValueTask<IAsyncDisposable> RegisterSemanticTokensProvider(ISemanticTokensProvider semanticTokensProvider);
+
     ValueTask SetModelMarkers(Uri modelUri, string markersOwner, IReadOnlyList<MarkerData> markers);
 
     ValueTask<bool> SetModelContent(Uri modelUri, string newContent, int? expectedVersionId = null);

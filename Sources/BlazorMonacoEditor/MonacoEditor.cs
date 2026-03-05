@@ -170,6 +170,10 @@ partial class MonacoEditor : IAsyncDisposable
         };
         Logger.LogDebug("Updating editor options, AutomaticLayout: {AutomaticLayout}", options.AutomaticLayout);
         await editor.UpdateOptions(options);
+        await MonacoInterop.UpdateOptions(Id, new GlobalEditorOptions
+        {
+            SemanticHighlightingEnabled = true
+        });
     }
 
     public override async Task SetParametersAsync(ParameterView parameters)
