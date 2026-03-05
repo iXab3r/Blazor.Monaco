@@ -12,25 +12,29 @@ using Microsoft.Extensions.Logging;
 
 namespace BlazorMonacoEditor;
 
-partial class MonacoEditor : IAsyncDisposable
+partial class MonacoDiffEditor : IAsyncDisposable
 {
     private static long editorIdx = 0;
-    
+
     /// <summary>
     /// Reason of using observable for it is that Render and Parameters events could be called simultaneously
     /// </summary>
     private readonly Subject<string> updateSink = new();
-    private readonly ITextModel fallbackTextModel = new TextModel();
-    
+    private readonly ITextModel fallbackOriginalTextModel = new TextModel();
+    private readonly ITextModel fallbackModifiedTextModel = new TextModel();
+
     //concurrent collections are needed as async/load process could be in async mode
     private readonly ConcurrentDictionary<TextModelId, ITextModel> textModelById = new();
     private readonly ConcurrentDictionary<TextModelId, MonacoTextModelFacade> textModelFacadeById = new();
-    
-    private ElementReference monacoContainer;
-    private CodeEditorFacade? editor;
-    private MonacoTextModelFacade? activeModel;
 
-    [Parameter] public ITextModel? TextModel { get; set; }
+    private ElementReference monacoContainer;
+    private MonacoDiffEditorFacade? editor;
+    private MonacoTextModelFacade? activeOriginalModel;
+    private MonacoTextModelFacade? activeModifiedModel;
+
+    [Parameter] public ITextModel? OriginalTextModel { get; set; }
+
+    [Parameter] public ITextModel? ModifiedTextModel { get; set; }
 
     [Parameter] public string? LanguageId { get; set; }
 
@@ -45,20 +49,22 @@ partial class MonacoEditor : IAsyncDisposable
     [Parameter] public EventCallback<bool> ShowLineNumbersChanged { get; set; }
 
     [Parameter] public bool ShowCodeMap { get; set; }
-    
+
     [Parameter] public bool AutoDetectLanguage { get; set; }
-    
+
     [Parameter] public bool IsReadOnly { get; set; }
-    
+
+    [Parameter] public bool OriginalEditable { get; set; }
+
     [Parameter] public EventCallback<bool> ShowCodeMapChanged { get; set; }
-    
+
     public CompositeDisposable Anchors { get; } = new();
-    
+
     public MonacoEditorId Id { get; }
 
-    public MonacoEditor()
+    public MonacoDiffEditor()
     {
-        var editorId = $"monaco-{Interlocked.Increment(ref editorIdx)}";
+        var editorId = $"monaco-diff-{Interlocked.Increment(ref editorIdx)}";
         Id = new MonacoEditorId(editorId);
     }
 
@@ -68,9 +74,8 @@ partial class MonacoEditor : IAsyncDisposable
         {
             Logger.LogDebug("First Render");
 
-            editor = await MonacoInterop.CreateEditor(monacoContainer, Id);
-            await MonacoInterop.ShowCompletionDetails(Id, true);
-            Logger.LogDebug("Editor Created");
+            editor = await MonacoInterop.CreateDiffEditor(monacoContainer, Id);
+            Logger.LogDebug("Diff Editor Created");
 
             Anchors.Add(updateSink.SubscribeAsync(UpdateEditor));
             updateSink.OnNext("OnAfterRenderAsync");
@@ -87,21 +92,28 @@ partial class MonacoEditor : IAsyncDisposable
     {
         if (editor == null)
         {
-            throw new InvalidOperationException("Editor must be created at this point");
+            throw new InvalidOperationException("Diff editor must be created at this point");
         }
         cancellationToken.ThrowIfCancellationRequested();
 
-        Logger.LogDebug($"Updating editor, reason: {reason}");
-        
-        var localModel = TextModel ?? fallbackTextModel;
-        textModelById.TryAdd(localModel.Id, localModel);
-        var remoteModel = await GetOrCreateRemoteModel(localModel, cancellationToken);
-        
-        var differentUri = activeModel == null || !Equals(activeModel.Uri, remoteModel.Uri);
-        if (differentUri)
+        Logger.LogDebug($"Updating diff editor, reason: {reason}");
+
+        var localOriginalModel = OriginalTextModel ?? fallbackOriginalTextModel;
+        var localModifiedModel = ModifiedTextModel ?? fallbackModifiedTextModel;
+
+        textModelById.TryAdd(localOriginalModel.Id, localOriginalModel);
+        textModelById.TryAdd(localModifiedModel.Id, localModifiedModel);
+
+        var remoteOriginalModel = await GetOrCreateRemoteModel(localOriginalModel, cancellationToken);
+        var remoteModifiedModel = await GetOrCreateRemoteModel(localModifiedModel, cancellationToken);
+
+        var differentOriginalUri = activeOriginalModel == null || !Equals(activeOriginalModel.Uri, remoteOriginalModel.Uri);
+        var differentModifiedUri = activeModifiedModel == null || !Equals(activeModifiedModel.Uri, remoteModifiedModel.Uri);
+        if (differentOriginalUri || differentModifiedUri)
         {
-            activeModel = remoteModel;
-            await editor.SetModel(remoteModel);
+            activeOriginalModel = remoteOriginalModel;
+            activeModifiedModel = remoteModifiedModel;
+            await editor.SetModel(remoteOriginalModel, remoteModifiedModel);
         }
 
         await UpdateOptionsIfNeeded();
@@ -110,11 +122,6 @@ partial class MonacoEditor : IAsyncDisposable
 
     private async Task<MonacoTextModelFacade> GetOrCreateRemoteModel(ITextModel localModel, CancellationToken cancellationToken)
     {
-        if (editor == null)
-        {
-            throw new InvalidOperationException("Editor must be created at this point");
-        }
-
         cancellationToken.ThrowIfCancellationRequested();
 
         if (textModelFacadeById.TryGetValue(localModel.Id, out var modelFacade))
@@ -122,7 +129,7 @@ partial class MonacoEditor : IAsyncDisposable
             return modelFacade;
         }
 
-        var modelUri = new Uri($"inmemory://{editor.Id}/{localModel.Id}");
+        var modelUri = new Uri($"inmemory://{Id}/{localModel.Id}");
         Logger.LogDebug($"Creating new remote(Monaco) facade for local text model @ {modelUri}: {localModel}");
 
         string? language;
@@ -134,7 +141,7 @@ partial class MonacoEditor : IAsyncDisposable
         {
             language = LanguageId;
         }
-        
+
         Logger.LogDebug($"Creating model with language '{language}' @ {modelUri}: {localModel}");
         var actualText = await localModel.GetTextAsync(cancellationToken);
         var remoteModel = await MonacoInterop.CreateTextModel(modelUri, actualText, language ?? string.Empty);
@@ -144,7 +151,7 @@ partial class MonacoEditor : IAsyncDisposable
         var syncCoordinator = new TextSyncCoordinator(localModel, remoteModel, Logger);
         remoteModel.Anchors.Add(syncCoordinator);
         remoteModel.Anchors.Add(Disposable.Create(() => Logger.LogDebug("Remote(Monaco) text model has been disposed: {remoteModel}", remoteModel)));
-         
+
         textModelFacadeById[localModel.Id] = remoteModel;
         return remoteModel;
     }
@@ -153,12 +160,14 @@ partial class MonacoEditor : IAsyncDisposable
     {
         if (editor == null)
         {
-            throw new InvalidOperationException("Editor is not loaded yet");
+            throw new InvalidOperationException("Diff editor is not loaded yet");
         }
 
         var options = new EditorOptions()
         {
             AutomaticLayout = true,
+            InDiffEditor = true,
+            OriginalEditable = OriginalEditable,
             LineNumbers = ShowLineNumbers ? "on" : "off",
             LineNumbersMinChars = LineNumbersMinChars,
             GlyphMargin = true,
@@ -168,7 +177,7 @@ partial class MonacoEditor : IAsyncDisposable
                 Enabled = ShowCodeMap
             }
         };
-        Logger.LogDebug("Updating editor options, AutomaticLayout: {AutomaticLayout}", options.AutomaticLayout);
+        Logger.LogDebug("Updating diff editor options, AutomaticLayout: {AutomaticLayout}", options.AutomaticLayout);
         await editor.UpdateOptions(options);
     }
 
@@ -190,8 +199,8 @@ partial class MonacoEditor : IAsyncDisposable
             await textModelFacade.DisposeJsSafeAsync();
         }
     }
-    
-    private static string DetectLanguage(System.Uri uri)
+
+    private static string DetectLanguage(Uri uri)
     {
         var extension = Path.GetExtension(uri.LocalPath)
             .TrimStart('.')
@@ -199,7 +208,7 @@ partial class MonacoEditor : IAsyncDisposable
         return extension switch
         {
             "css" => "css",
-            "js" => "javascript", 
+            "js" => "javascript",
             "ts" => "typescript",
             "html" => "html",
             "cshtml" => "razor",

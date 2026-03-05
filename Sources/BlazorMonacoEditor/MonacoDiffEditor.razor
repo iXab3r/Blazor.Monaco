@@ -1,0 +1,13 @@
+@using BlazorMonacoEditor.Interop
+@using BlazorMonacoEditor.Scaffolding
+@using Microsoft.CodeAnalysis.Text
+@using System.Reactive.Subjects
+@using System.Reactive.Disposables
+@using System.Reactive
+@using System.Reactive.Linq
+@using System.Threading
+@using BlazorMonacoEditor.Services
+@inject MonacoInterop MonacoInterop
+@inject ILogger<MonacoDiffEditor> Logger
+
+<div @ref="monacoContainer" class="monaco-editor-container"></div>

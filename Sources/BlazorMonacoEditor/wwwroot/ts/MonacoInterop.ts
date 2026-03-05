@@ -1,6 +1,7 @@
 // noinspection JSUnusedGlobalSymbols,UnnecessaryLocalVariableJS
 
 import {IEditorContext} from './IEditorContext';
+import {IDiffEditorContext} from './IDiffEditorContext';
 import {ITextModelContext} from './ITextModelContext';
 import {EditorEventHandler} from './EditorEventHandler';
 import {TextModelEventHandler} from './TextModelEventHandler';
@@ -30,6 +31,7 @@ class MonacoInterop {
     private readonly logger: logLevel.Logger = logLevel.getLogger(MonacoInterop.name);
 
     private readonly editors: { [id: string]: IEditorContext } = {};
+    private readonly diffEditors: { [id: string]: IDiffEditorContext } = {};
     private readonly models: { [uri: string]: ITextModelContext } = {};
     private readonly editorIdByMonacoEditorId: Map<string, string> = new Map<string, string>();
     private readonly editorActionsById: Map<string, monaco.editor.IActionDescriptor> = new Map<string, monaco.editor.IActionDescriptor>();
@@ -41,7 +43,7 @@ class MonacoInterop {
 
         this.logger.setLevel(logLevel.levels.DEBUG);
         MonacoInterop.instance = this;
-        this.logger.info(`MonacoInterop instance is being created`);
+        this.logger.info(`MonacoInterop instance is being created1`);
         monaco.editor.setTheme('vs-dark');
     }
 
@@ -75,6 +77,39 @@ class MonacoInterop {
 
         this.editors[editorId] = editorContext;
         this.editorIdByMonacoEditorId[newEditor.getId()] = editorId;
+    }
+
+    /**
+     * Create a diff editor control.
+     * @param editorId The id of the control (to reference it later)
+     * @param container The HTML Element container.
+     * @param blazorCallback An object on which to invoke event methods.
+     */
+    createDiffEditor(editorId: string, container: HTMLElement, blazorCallback: IBlazorInteropObject) {
+        this.logger.debug(`Creating diff editor with Id ${editorId} inside ${container}, .net callback: ${blazorCallback}`);
+        const newEditor = monaco.editor.createDiffEditor(container, {
+            automaticLayout: true,
+            theme: 'vs-dark'
+        });
+        this.logger.debug(`Created diff editor with Id ${editorId}`);
+
+        const editorContext: IDiffEditorContext = {
+            editorId: editorId,
+            diffEditor: newEditor,
+            updating: false,
+            eventHandler: new EditorEventHandler(blazorCallback),
+            eventSink: blazorCallback
+        };
+
+        const resizeObserver = new ResizeObserver(() => {
+            if (newEditor) {
+                this.logger.debug(`Resizing diff editor ${editorId}`);
+                newEditor.layout();
+            }
+        });
+        resizeObserver.observe(container);
+
+        this.diffEditors[editorId] = editorContext;
     }
 
     private addDuplicateLineCommand(editor: monaco.editor.IStandaloneCodeEditor) {
@@ -116,10 +151,23 @@ class MonacoInterop {
         editorCtxt.codeEditor.dispose();
     }
 
+    disposeDiffEditor(editorId: string) {
+        this.logger.debug(`Disposing diff editor ${editorId}`);
+        const editorCtxt = this.getDiffEditorById(editorId);
+        this.diffEditors[editorId] = null;
+        editorCtxt.diffEditor.dispose();
+    }
+
     updateEditorOptions(editorId: string, newOptions: monaco.editor.IEditorOptions & monaco.editor.IGlobalEditorOptions) {
         this.logger.info(`Updating editor options: ${JSON.stringify(newOptions)}`);
         const editorCtxt = this.getEditorById(editorId);
         editorCtxt.codeEditor.updateOptions(newOptions);
+    }
+
+    updateDiffEditorOptions(editorId: string, newOptions: monaco.editor.IDiffEditorOptions) {
+        this.logger.info(`Updating diff editor options: ${JSON.stringify(newOptions)}`);
+        const editorCtxt = this.getDiffEditorById(editorId);
+        editorCtxt.diffEditor.updateOptions(newOptions);
     }
 
     setEditorCompletionDetailsVisibility(editorId: string, isVisible: boolean) {
@@ -260,6 +308,24 @@ class MonacoInterop {
         editorCtxt.codeEditor.setModel(modelCtxt.textModel);
     }
 
+    /**
+     * Change the original/modified models that a diff editor is displaying.
+     * @param editorId The ID of the diff editor.
+     * @param originalTextModelUri The URI of the original model.
+     * @param modifiedTextModelUri The URI of the modified model.
+     */
+    setDiffEditorModel(editorId: string, originalTextModelUri: string, modifiedTextModelUri: string) {
+        this.logger.debug(`Setting diff editor ${editorId} models: original=${originalTextModelUri}, modified=${modifiedTextModelUri}`);
+        const editorCtxt = this.getDiffEditorById(editorId);
+        const originalModelCtxt = this.getTextModelByUri(originalTextModelUri);
+        const modifiedModelCtxt = this.getTextModelByUri(modifiedTextModelUri);
+        this.logger.debug(`Models found for diff editor ${editorId}`);
+        editorCtxt.diffEditor.setModel({
+            original: originalModelCtxt.textModel,
+            modified: modifiedModelCtxt.textModel
+        });
+    }
+
     getTextModelByUri(textModelUri: string): ITextModelContext {
         const modelCtxt = this.models[textModelUri];
         if (!modelCtxt) {
@@ -272,6 +338,14 @@ class MonacoInterop {
         const editorCtxt = this.editors[editorId];
         if (!editorCtxt) {
             throw `Specified editor ${editorId} is not created.`;
+        }
+        return editorCtxt;
+    }
+
+    getDiffEditorById(editorId: string): IDiffEditorContext {
+        const editorCtxt = this.diffEditors[editorId];
+        if (!editorCtxt) {
+            throw `Specified diff editor ${editorId} is not created.`;
         }
         return editorCtxt;
     }
@@ -480,4 +554,5 @@ class MonacoInterop {
     }
 }
 
+console.info("MonacoInterop.ts loaded");
 window['monacoInterop'] = new MonacoInterop();

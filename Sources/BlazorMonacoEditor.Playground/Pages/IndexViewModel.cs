@@ -48,44 +48,10 @@ public class IndexViewModel : ReactiveObject
         var diffDocument = AddDocument();
         DiffTextModel = textModelByDocumentId[diffDocument.Id];
 
-        var manualRefreshTrigger = new Subject<Unit>();
-        RefreshDiffCommand = ReactiveCommand.Create(() => manualRefreshTrigger.OnNext(Unit.Default));
-
         this.WhenAnyValue(x => x.DocumentId)
             .Select(id => id != null && textModelByDocumentId.TryGetValue(id, out var model) ? model : null)
             .BindTo(this, x => x.TextModel);
-
-        this.WhenAnyValue(x => x.TextModel, x => x.DiffTextModel)
-            .Select(x => 
-            {
-                var m1 = x.Item1;
-                var m2 = x.Item2;
-                IObservable<Unit> autoRefresh = Observable.CombineLatest(
-                    m1?.WhenChanged.StartWith(EventArgs.Empty) ?? Observable.Return(EventArgs.Empty),
-                    m2?.WhenChanged.StartWith(EventArgs.Empty) ?? Observable.Return(EventArgs.Empty),
-                    (_, _) => Unit.Default);
-                return Observable.Merge(autoRefresh, manualRefreshTrigger).Select(_ => (m1, m2));
-            })
-            .Switch()
-            .Select(async x =>
-            {
-                var t1 = x.Item1 != null ? (await x.Item1.GetTextAsync()).ToString() : string.Empty;
-                var t2 = x.Item2 != null ? (await x.Item2.GetTextAsync()).ToString() : string.Empty;
-                return $"--- Editor 1 ({x.Item1?.Id}) ---\n{t1}\n\n--- Editor 2 ({x.Item2?.Id}) ---\n{t2}";
-            })
-            .Switch()
-            .BindTo(this, x => x.CombinedText);
     }
-    
-    public ReactiveCommand<Unit, Unit> RefreshDiffCommand { get; }
-
-    public void RefreshDiff()
-    {
-        RefreshDiffCommand.Execute().Subscribe();
-    }
-    
-    [Reactive]
-    public string CombinedText { get; private set; }
     
     public ProjectInfo ProjectInfo { get; }
     

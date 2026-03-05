@@ -13,6 +13,14 @@ public sealed record EditorOptions
     public bool? InDiffEditor { get; set; }
 
     /// <summary>
+    /// If true, the original editor should be editable.
+    /// Defaults to false.
+    /// </summary>
+    [JsonPropertyName("originalEditable")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool? OriginalEditable { get; set; }
+
+    /// <summary>
     /// The aria label for the editor's textarea (when it is focused).
     /// </summary>
     [JsonPropertyName("ariaLabel")]
@@ -49,7 +57,7 @@ public sealed record EditorOptions
 
     /// <summary>
     /// A string containing the word separators used when doing word navigation.
-    /// Defaults to `~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?
+    /// Defaults to `~!@#$%^&amp;*()-=+[{]}\\|;:\'",.&lt;&gt;/?`
     /// </summary>
     [JsonPropertyName("wordSeparators")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

@@ -14,7 +14,8 @@ namespace BlazorMonacoEditor.Services
     internal sealed class MonacoInterop : IMonacoInterop, IAsyncDisposable
     {
         private static readonly string JsUtilsFilePath = "./_content/BlazorMonacoEditor/scriptLoader.js";
-        private static readonly string MonacoInteropFilePath = "./_content/BlazorMonacoEditor/js/monaco.bundle.js";
+        private static readonly string MonacoInteropCacheBust = DateTime.UtcNow.Ticks.ToString();
+        private static readonly string MonacoInteropFilePath = $"./_content/BlazorMonacoEditor/js/monaco.bundle.js?v={MonacoInteropCacheBust}";
         private const string InteropPrefix = "monacoInterop.";
 
         private readonly Lazy<Task<IJSObjectReference>> loaderTask;
@@ -60,13 +61,28 @@ namespace BlazorMonacoEditor.Services
         }
 
         /// <summary>
+        /// Create a new Monaco Diff Editor, inside the specified HTML element.
+        /// </summary>
+        /// <param name="element">The HTML element.</param>
+        /// <param name="editorId">The editor id.</param>
+        /// <returns>A diff editor.</returns>
+        public async ValueTask<MonacoDiffEditorFacade> CreateDiffEditor(ElementReference element, MonacoEditorId editorId)
+        {
+            var monacoDiffEditor = new MonacoDiffEditorFacade(editorId, this);
+
+            await InvokeVoidAsync("createDiffEditor", editorId, element, DotNetObjectReference.Create(monacoDiffEditor));
+
+            return monacoDiffEditor;
+        }
+
+        /// <summary>
         /// Create a new text model (representing a file).
         /// </summary>
         /// <param name="uri">The URI of the model.</param>
         /// <param name="value">The value of the model (i.e. content of the file).</param>
         /// <param name="languageId">The language ID for the file.</param>
         /// <returns>A text model.</returns>
-        public async ValueTask<MonacoTextModelFacade> CreateTextModel(Uri uri, SourceText value, string languageId = null)
+        public async ValueTask<MonacoTextModelFacade> CreateTextModel(Uri uri, SourceText value, string? languageId = null)
         {
             if (uri is null)
             {
@@ -116,9 +132,19 @@ namespace BlazorMonacoEditor.Services
             await InvokeVoidAsync("disposeEditor", editorId);
         }
 
+        public async ValueTask DisposeDiffEditor(MonacoEditorId editorId)
+        {
+            await InvokeVoidAsync("disposeDiffEditor", editorId);
+        }
+
         public async ValueTask UpdateOptions(MonacoEditorId editorId, EditorOptions options)
         {
             await InvokeVoidAsync("updateEditorOptions", editorId, options);
+        }
+
+        public async ValueTask UpdateDiffOptions(MonacoEditorId editorId, EditorOptions options)
+        {
+            await InvokeVoidAsync("updateDiffEditorOptions", editorId, options);
         }
 
         public async ValueTask ShowCompletionDetails(MonacoEditorId editorId, bool isVisible)
@@ -169,6 +195,20 @@ namespace BlazorMonacoEditor.Services
         public async ValueTask ExecuteModelEdits(Uri modelUri, IReadOnlyList<IdentifiedSingleEditOperation> operations)
         {
             await InvokeVoidAsync("executeModelEdits", modelUri.ToString(), operations);
+        }
+
+        public async ValueTask SetDiffEditorModel(MonacoEditorId editorId, Uri originalModelUri, Uri modifiedModelUri)
+        {
+            if (originalModelUri is null)
+            {
+                throw new ArgumentNullException(nameof(originalModelUri));
+            }
+            if (modifiedModelUri is null)
+            {
+                throw new ArgumentNullException(nameof(modifiedModelUri));
+            }
+
+            await InvokeVoidAsync("setDiffEditorModel", editorId, originalModelUri.ToString(), modifiedModelUri.ToString());
         }
 
         /// <summary>
