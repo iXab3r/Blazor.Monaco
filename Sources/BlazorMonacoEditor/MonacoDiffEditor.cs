@@ -166,6 +166,7 @@ partial class MonacoDiffEditor : IAsyncDisposable
         var options = new EditorOptions()
         {
             AutomaticLayout = true,
+            FixedOverflowWidgets = true,
             InDiffEditor = true,
             OriginalEditable = OriginalEditable,
             LineNumbers = ShowLineNumbers ? "on" : "off",

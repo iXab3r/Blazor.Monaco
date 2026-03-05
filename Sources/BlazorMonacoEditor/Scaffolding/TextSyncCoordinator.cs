@@ -14,8 +14,6 @@ namespace BlazorMonacoEditor.Scaffolding;
 
 internal sealed class TextSyncCoordinator : IDisposable
 {
-    private static readonly TimeSpan DefaultMonacoChangeThrottle = TimeSpan.FromMilliseconds(225);
-
     private readonly CompositeDisposable anchors = new();
     private readonly ITextModel localModel;
     private readonly ILogger logger;
@@ -25,17 +23,13 @@ internal sealed class TextSyncCoordinator : IDisposable
     public TextSyncCoordinator(
         ITextModel localModel,
         MonacoTextModelFacade remoteModel,
-        ILogger logger,
-        TimeSpan? monacoChangeThrottle = null,
-        IScheduler? monacoThrottleScheduler = null)
+        ILogger logger)
         : this(
             localModel,
             remoteModel?.WhenContentChanged ?? throw new ArgumentNullException(nameof(remoteModel)),
             () => remoteModel.Text,
             (changes, _) => remoteModel.ApplyChanges(changes),
-            logger,
-            monacoChangeThrottle,
-            monacoThrottleScheduler)
+            logger)
     {
     }
 
@@ -44,9 +38,7 @@ internal sealed class TextSyncCoordinator : IDisposable
         IObservable<MonacoTextModelChange> remoteChanges,
         Func<SourceText> getRemoteTextSnapshot,
         Func<IReadOnlyList<IdentifiedSingleEditOperation>, CancellationToken, ValueTask> applyLocalChangesToRemoteAsync,
-        ILogger logger,
-        TimeSpan? monacoChangeThrottle = null,
-        IScheduler? monacoThrottleScheduler = null)
+        ILogger logger)
     {
         this.localModel = localModel ?? throw new ArgumentNullException(nameof(localModel));
         this.getRemoteTextSnapshot = getRemoteTextSnapshot ?? throw new ArgumentNullException(nameof(getRemoteTextSnapshot));
@@ -57,23 +49,17 @@ internal sealed class TextSyncCoordinator : IDisposable
             throw new ArgumentNullException(nameof(remoteChanges));
         }
 
-        var throttle = monacoChangeThrottle ?? DefaultMonacoChangeThrottle;
-        var throttleScheduler = monacoThrottleScheduler ?? DefaultScheduler.Instance;
-
         logger.LogDebug(
-            "Starting change-list TextSyncCoordinator for model {ModelId}: Monaco throttle {ThrottleMs} ms",
-            localModel.Id,
-            throttle.TotalMilliseconds);
+            "Starting change-list TextSyncCoordinator for model {ModelId}",
+            localModel.Id);
 
         var localChanges = localModel.WhenChanged
             .Select(_ => (SyncWorkItem)new LocalSyncWorkItem());
 
-        var monacoBatches = remoteChanges
-            .Buffer(remoteChanges.Throttle(throttle, throttleScheduler))
-            .Where(batch => batch.Count > 0)
-            .Select(batch => (SyncWorkItem)new MonacoBatchSyncWorkItem(batch));
+        var monacoChanges = remoteChanges
+            .Select(change => (SyncWorkItem)new MonacoSyncWorkItem(change));
 
-        var syncItems = Observable.Merge(localChanges, monacoBatches);
+        var syncItems = Observable.Merge(localChanges, monacoChanges);
         anchors.Add(syncItems.SubscribeAsync(HandleSyncWorkItemAsync, HandlePipelineError));
     }
 
@@ -82,8 +68,6 @@ internal sealed class TextSyncCoordinator : IDisposable
         IObservable<MonacoTextModelChange> remoteChanges,
         Func<string, int?, CancellationToken, ValueTask<bool>> pushLocalTextToRemoteAsync,
         ILogger logger,
-        TimeSpan? monacoChangeThrottle = null,
-        IScheduler? monacoThrottleScheduler = null,
         SourceText? initialSynchronizedLocalText = null)
         : this(
             localModel,
@@ -94,9 +78,7 @@ internal sealed class TextSyncCoordinator : IDisposable
                 var textToPush = await localModel.GetTextAsync(cancellationToken);
                 await pushLocalTextToRemoteAsync(textToPush.ToString(), null, cancellationToken);
             },
-            logger,
-            monacoChangeThrottle,
-            monacoThrottleScheduler)
+            logger)
     {
     }
 
@@ -117,8 +99,8 @@ internal sealed class TextSyncCoordinator : IDisposable
             case LocalSyncWorkItem:
                 await ApplyLocalChangeAsync(cancellationToken);
                 break;
-            case MonacoBatchSyncWorkItem monacoBatchSyncWorkItem:
-                await ApplyMonacoBatchAsync(monacoBatchSyncWorkItem.Changes, cancellationToken);
+            case MonacoSyncWorkItem monacoSyncWorkItem:
+                await ApplyMonacoChangeAsync(monacoSyncWorkItem.Change, cancellationToken);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(workItem), $"Unsupported sync item type: {workItem.GetType()}");
@@ -166,48 +148,35 @@ internal sealed class TextSyncCoordinator : IDisposable
             localToRemoteChanges.Count);
     }
 
-    private async Task ApplyMonacoBatchAsync(IList<MonacoTextModelChange> batch, CancellationToken cancellationToken)
+    private async Task ApplyMonacoChangeAsync(MonacoTextModelChange change, CancellationToken cancellationToken)
     {
-        if (batch.Count <= 0)
-        {
-            return;
-        }
-
-        var firstVersion = batch[0].VersionId;
-        var lastVersion = batch[batch.Count - 1].VersionId;
-        var remoteText = batch[batch.Count - 1].NewText;
+        var remoteText = change.NewText;
 
         var localText = await localModel.GetTextAsync(cancellationToken);
         if (localText.ContentEquals(remoteText))
         {
             logger.LogDebug(
-                "Skipping remote->local update for model {ModelId}: batch {BatchSize}, versions {FirstVersion}->{LastVersion}, same text",
+                "Skipping remote->local update for model {ModelId}: version {VersionId}, same text",
                 localModel.Id,
-                batch.Count,
-                firstVersion,
-                lastVersion);
+                change.VersionId);
             return;
         }
         var remoteToLocalChanges = remoteText.GetTextChanges(localText);
         if (remoteToLocalChanges.Count <= 0)
         {
             logger.LogDebug(
-                "Skipping remote->local update for model {ModelId}: batch {BatchSize}, versions {FirstVersion}->{LastVersion}, no diffs",
+                "Skipping remote->local update for model {ModelId}: version {VersionId}, no diffs",
                 localModel.Id,
-                batch.Count,
-                firstVersion,
-                lastVersion);
+                change.VersionId);
             return;
         }
 
         var updatedLocalText = MonacoRoslynAdapter.ApplyChanges(localText, remoteToLocalChanges);
 
         logger.LogDebug(
-            "Applying remote->local diffs for model {ModelId}: batch {BatchSize}, versions {FirstVersion}->{LastVersion}, {ChangeCount} change(s), lengths local={LocalLength}, remote={RemoteLength}",
+            "Applying remote->local diffs for model {ModelId}: version {VersionId}, {ChangeCount} change(s), lengths local={LocalLength}, remote={RemoteLength}",
             localModel.Id,
-            batch.Count,
-            firstVersion,
-            lastVersion,
+            change.VersionId,
             remoteToLocalChanges.Count,
             localText.Length,
             remoteText.Length);
@@ -230,5 +199,5 @@ internal sealed class TextSyncCoordinator : IDisposable
 
     private sealed record LocalSyncWorkItem : SyncWorkItem;
 
-    private sealed record MonacoBatchSyncWorkItem(IList<MonacoTextModelChange> Changes) : SyncWorkItem;
+    private sealed record MonacoSyncWorkItem(MonacoTextModelChange Change) : SyncWorkItem;
 }

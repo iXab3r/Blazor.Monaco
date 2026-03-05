@@ -159,6 +159,7 @@ partial class MonacoEditor : IAsyncDisposable
         var options = new EditorOptions()
         {
             AutomaticLayout = true,
+            FixedOverflowWidgets = true,
             LineNumbers = ShowLineNumbers ? "on" : "off",
             LineNumbersMinChars = LineNumbersMinChars,
             GlyphMargin = true,

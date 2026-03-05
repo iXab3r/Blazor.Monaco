@@ -82,7 +82,11 @@ class MonacoInterop {
      */
     createEditor(editorId: string, container: HTMLElement, blazorCallback: IBlazorInteropObject) {
         this.logger.debug(`Creating editor with Id ${editorId} inside ${container}, .net callback: ${blazorCallback}`);
-        const newEditor = monaco.editor.create(container);
+        const newEditor = monaco.editor.create(container, {
+            automaticLayout: true,
+            fixedOverflowWidgets: true,
+            theme: MonacoInterop.DefaultThemeName
+        });
         this.logger.debug(`Created editor with Id ${editorId}, MonacoEditorId: ${newEditor.getId()}`);
 
         this.addDuplicateLineCommand(newEditor);
@@ -116,6 +120,7 @@ class MonacoInterop {
         this.logger.debug(`Creating diff editor with Id ${editorId} inside ${container}, .net callback: ${blazorCallback}`);
         const newEditor = monaco.editor.createDiffEditor(container, {
             automaticLayout: true,
+            fixedOverflowWidgets: true,
             theme: MonacoInterop.DefaultThemeName
         });
         this.logger.debug(`Created diff editor with Id ${editorId}`);

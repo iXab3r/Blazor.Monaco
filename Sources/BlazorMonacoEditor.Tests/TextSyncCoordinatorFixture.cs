@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using BlazorMonacoEditor.Scaffolding;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Reactive.Testing;
 using NUnit.Framework;
 using Shouldly;
 
@@ -21,10 +20,9 @@ public sealed class TextSyncCoordinatorFixture
     public async Task Given_LocalTextChange_When_Processed_Then_TextIsPushedToMonaco()
     {
         // Given
-        var testScheduler = new TestScheduler();
         var localModel = new TestTextModel("alpha");
         var remoteHarness = new RemoteHarness();
-        using var coordinator = CreateCoordinator(localModel, remoteHarness, testScheduler);
+        using var coordinator = CreateCoordinator(localModel, remoteHarness);
 
         // When
         localModel.SetTextFromExternalEditor("alpha+");
@@ -40,10 +38,9 @@ public sealed class TextSyncCoordinatorFixture
     public async Task Given_StaleMonacoChangeBeforeLocalPush_When_BatchContainsNewGenerationChanges_Then_StaleChangeIsIgnored()
     {
         // Given
-        var testScheduler = new TestScheduler();
         var localModel = new TestTextModel("A");
         var remoteHarness = new RemoteHarness();
-        using var coordinator = CreateCoordinator(localModel, remoteHarness, testScheduler);
+        using var coordinator = CreateCoordinator(localModel, remoteHarness);
 
         remoteHarness.EmitMonacoChange(CreateInsertChange(versionId: 1, position: 1, insertedText: "1", resultingText: "A1"));
         localModel.SetTextFromExternalEditor("L");
@@ -54,7 +51,6 @@ public sealed class TextSyncCoordinatorFixture
         // When
         remoteHarness.EmitMonacoChange(CreateFlushChange(versionId: 2, resultingText: "L"));
         remoteHarness.EmitMonacoChange(CreateInsertChange(versionId: 3, position: 1, insertedText: "!", resultingText: "L!"));
-        testScheduler.AdvanceBy(TimeSpan.FromMilliseconds(250).Ticks);
         await WaitUntilAsync(
             () => localModel.CurrentText == "L!",
             "Expected stale generation Monaco change to be ignored and newer generation change to apply");
@@ -67,10 +63,9 @@ public sealed class TextSyncCoordinatorFixture
     public async Task Given_NoKnownMonacoVersion_When_LocalChangeIsPushed_Then_PushDoesNotRequireExpectedVersion()
     {
         // Given
-        var testScheduler = new TestScheduler();
         var localModel = new TestTextModel("alpha");
         var remoteHarness = new RemoteHarness();
-        using var coordinator = CreateCoordinator(localModel, remoteHarness, testScheduler);
+        using var coordinator = CreateCoordinator(localModel, remoteHarness);
 
         // When
         localModel.SetTextFromExternalEditor("alpha+");
@@ -88,13 +83,11 @@ public sealed class TextSyncCoordinatorFixture
     public async Task Given_InFlightLocalPush_When_FlushAndUserEditArriveBeforePushCompletion_Then_UserEditShouldNotBeDropped()
     {
         // Given
-        var testScheduler = new TestScheduler();
         var localModel = new TestTextModel("start");
         var remoteHarness = new RemoteHarness();
-        using var coordinator = CreateCoordinator(localModel, remoteHarness, testScheduler);
+        using var coordinator = CreateCoordinator(localModel, remoteHarness);
 
         remoteHarness.EmitMonacoChange(CreateFlushChange(versionId: 22, resultingText: "start"));
-        testScheduler.AdvanceBy(TimeSpan.FromMilliseconds(250).Ticks);
         await Task.Delay(40);
 
         remoteHarness.BlockNextSetContentCompletionOnly();
@@ -109,7 +102,6 @@ public sealed class TextSyncCoordinatorFixture
         remoteHarness.EmitMonacoChange(CreateInsertChange(versionId: 24, position: 5, insertedText: "!", resultingText: "imgui!"));
         remoteHarness.CompleteBlockedSetContent();
 
-        testScheduler.AdvanceBy(TimeSpan.FromMilliseconds(250).Ticks);
         await WaitUntilAsync(
             () => localModel.CurrentText == "imgui!",
             "Expected Monaco user edit emitted during in-flight push to be preserved");
@@ -120,16 +112,13 @@ public sealed class TextSyncCoordinatorFixture
 
     private static TextSyncCoordinator CreateCoordinator(
         TestTextModel localModel,
-        RemoteHarness remoteHarness,
-        TestScheduler testScheduler)
+        RemoteHarness remoteHarness)
     {
         return new TextSyncCoordinator(
             localModel,
             remoteHarness.WhenContentChanged,
             remoteHarness.SetContentAsync,
-            NullLogger.Instance,
-            TimeSpan.FromMilliseconds(225),
-            testScheduler);
+            NullLogger.Instance);
     }
 
     private static MonacoTextModelChange CreateInsertChange(int versionId, int position, string insertedText, string resultingText)
