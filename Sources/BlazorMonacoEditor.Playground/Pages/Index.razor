@@ -4,72 +4,117 @@
 @inject IMonacoInterop MonacoInterop
 @inject IndexViewModel DataContext
 
-<div class="m-2">
-    <div class=" d-flex my-1 gap-1">
-        <div class="input-group">
-            <input type="checkbox" id="isVisible" @bind="@DataContext.IsVisible"/>
-            <label for="isVisible" class="col-form-label mx-1">Is Visible</label>
-        </div>
+<div class="vh-100 d-flex flex-column overflow-hidden">
+    <div class="m-2 flex-shrink-0">
+        <div class=" d-flex my-1 gap-1 flex-wrap">
+            <div class="input-group w-auto">
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="checkbox" id="isDiffEnabled" @bind="@DataContext.IsDiffEnabled"/>
+                </div>
+                <label for="isDiffEnabled" class="input-group-text">Diff</label>
+                <button class="btn btn-outline-secondary" id="refreshDiff" @onclick="@DataContext.RefreshDiff">REFRESH</button>
+            </div>
+            
+            <div class="input-group w-auto">
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="checkbox" id="isVisible" @bind="@DataContext.IsVisible"/>
+                </div>
+                <label for="isVisible" class="input-group-text">Is Visible</label>
+            </div>
 
-        <div class="input-group">
-            <input type="checkbox" id="showLineNumbers" @bind="@DataContext.ShowLineNumbers"/>
-            <label for="showLineNumbers" class="col-form-label mx-1">Show Line Numbers</label>
-        </div>
+            <div class="input-group w-auto">
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="checkbox" id="showLineNumbers" @bind="@DataContext.ShowLineNumbers"/>
+                </div>
+                <label for="showLineNumbers" class="input-group-text">Show Line Numbers</label>
+            </div>
 
-        <div class="input-group">
-            <input type="checkbox" id="showMap" @bind="@DataContext.ShowCodeMap"/>
-            <label for="showMap" class="col-form-label mx-1">Show Map</label>
-        </div>
+            <div class="input-group w-auto">
+                <div class="input-group-text">
+                    <input class="form-check-input mt-0" type="checkbox" id="showMap" @bind="@DataContext.ShowCodeMap"/>
+                </div>
+                <label for="showMap" class="input-group-text">Show Map</label>
+            </div>
 
 
-        <div class="input-group">
-            <select @bind="@DataContext.DocumentIdAsString"
-                    class="form-control flex-shrink-1">
-                @foreach (var documentId in DataContext.Documents)
+            <div class="input-group w-auto">
+                <select @bind="@DataContext.DocumentIdAsString"
+                        class="form-select flex-shrink-1">
+                    @foreach (var documentId in DataContext.Documents)
+                    {
+                        <option value="@(DocumentIdTypeConverter.Instance.ConvertToString(documentId))">
+                            @documentId
+                        </option>
+                    }
+                </select>
+                <button class="btn btn-outline-secondary" id="addDocument" @onclick="@(async () => { DataContext.DocumentId = DataContext.AddDocument().Id; })">Add</button>
+            </div>
+
+            <select @bind="@DataContext.Theme"
+                    class="form-select w-auto">
+                @foreach (var theme in DataContext.KnownThemes)
                 {
-                    <option value="@(DocumentIdTypeConverter.Instance.ConvertToString(documentId))">
-                        @documentId
+                    <option value="@theme">
+                        @theme
                     </option>
                 }
             </select>
-            <button id="addDocument" onclick="@(async () => { DataContext.DocumentId = DataContext.AddDocument().Id; })">Add</button>
+
+            <select @bind="@DataContext.LanguageId"
+                    class="form-select w-auto">
+                @foreach (var languageId in DataContext.KnownLanguages)
+                {
+                    <option value="@languageId">
+                        @languageId
+                    </option>
+                }
+            </select>
+
+            <div class="flex-grow-1"></div>
         </div>
 
-        <select @bind="@DataContext.Theme"
-                class="form-control flex-shrink-1">
-            @foreach (var theme in DataContext.KnownThemes)
-            {
-                <option value="@theme">
-                    @theme
-                </option>
-            }
-        </select>
-
-        <select @bind="@DataContext.LanguageId"
-                class="form-control flex-shrink-1">
-            @foreach (var languageId in DataContext.KnownLanguages)
-            {
-                <option value="@languageId">
-                    @languageId
-                </option>
-            }
-        </select>
-
-        <div class="flex-grow-1"></div>
+        <textarea class="form-control" rows="2" readonly>@(DataContext.SourceCode.ToString())</textarea>
     </div>
 
-    <textarea class="w-100" rows="4" readonly>@(DataContext.SourceCode.ToString())</textarea>
+    <div class="flex-grow-1 overflow-hidden">
+        @if (DataContext.IsVisible)
+        {
+            @if (!DataContext.IsDiffEnabled)
+            {
+                <MonacoEditor Theme="@DataContext.Theme"
+                              @bind-LanguageId="@DataContext.LanguageId"
+                              ShowLineNumbers="@DataContext.ShowLineNumbers"
+                              ShowCodeMap="@DataContext.ShowCodeMap"
+                              TextModel="@DataContext.TextModel"
+                              />
+            }
+            else
+            {
+                <div class="d-flex h-100 overflow-hidden">
+                    <div class="flex-grow-1 h-100 border">
+                        <MonacoEditor Theme="@DataContext.Theme"
+                                      @bind-LanguageId="@DataContext.LanguageId"
+                                      ShowLineNumbers="@DataContext.ShowLineNumbers"
+                                      ShowCodeMap="@DataContext.ShowCodeMap"
+                                      TextModel="@DataContext.TextModel"
+                                      />
+                    </div>
+                    <div class="flex-grow-1 h-100 border mx-1">
+                        <MonacoEditor Theme="@DataContext.Theme"
+                                      @bind-LanguageId="@DataContext.LanguageId"
+                                      ShowLineNumbers="@DataContext.ShowLineNumbers"
+                                      ShowCodeMap="@DataContext.ShowCodeMap"
+                                      TextModel="@DataContext.DiffTextModel"
+                                      />
+                    </div>
+                    <div class="flex-grow-1 h-100 border">
+                        <textarea class="w-100 h-100 form-control border-0" style="resize: none;" readonly>@(DataContext.CombinedText)</textarea>
+                    </div>
+                </div>
+            }
+        }
+    </div>
 </div>
-
-@if (DataContext.IsVisible)
-{
-    <MonacoEditor Theme="@DataContext.Theme"
-                  @bind-LanguageId="@DataContext.LanguageId"
-                  ShowLineNumbers="@DataContext.ShowLineNumbers"
-                  ShowCodeMap="@DataContext.ShowCodeMap"
-                  TextModel="@DataContext.TextModel"
-                  />
-}
 
 @code{
 

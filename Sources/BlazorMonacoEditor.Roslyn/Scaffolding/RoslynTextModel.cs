@@ -16,7 +16,11 @@ public sealed class RoslynTextModel : ITextModel
     
     public required string Path { get; init; }
     
-    public IObservable<EventArgs> WhenChanged { get; } = Observable.Never<EventArgs>();
+    public IObservable<EventArgs> WhenChanged => Observable.FromEventPattern<WorkspaceChangeEventArgs>(
+        h => Workspace.WorkspaceChanged += h,
+        h => Workspace.WorkspaceChanged -= h)
+        .Where(x => x.EventArgs.ProjectId == DocumentId.ProjectId && x.EventArgs.DocumentId == DocumentId)
+        .Select(_ => EventArgs.Empty);
 
     public required DocumentId DocumentId { get; init; }
     
