@@ -191,15 +191,21 @@ namespace BlazorMonacoEditor.Services
         /// </summary>
         /// <param name="modelUri">The text model to update.</param>
         /// <param name="newContent">The new content of the file.</param>
+        /// <param name="expectedVersionId">The Monaco model version expected by the caller. If specified and mismatched, content is not applied.</param>
         /// <returns>Completion task.</returns>
-        public async ValueTask SetModelContent(Uri modelUri, string newContent)
+        public async ValueTask<bool> SetModelContent(Uri modelUri, string newContent, int? expectedVersionId = null)
         {
             if (modelUri is null)
             {
                 throw new ArgumentNullException(nameof(modelUri));
             }
 
-            await InvokeVoidAsync("setModelContent", modelUri.ToString(), newContent);
+            if (expectedVersionId is int expectedVersion)
+            {
+                return await InvokeAsync<bool>("setModelContent", modelUri.ToString(), newContent, expectedVersion);
+            }
+
+            return await InvokeAsync<bool>("setModelContent", modelUri.ToString(), newContent);
         }
 
         /// <summary>

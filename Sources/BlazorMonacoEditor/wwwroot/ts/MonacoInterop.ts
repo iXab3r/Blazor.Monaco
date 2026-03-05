@@ -226,9 +226,17 @@ class MonacoInterop {
      * @param textModelUri The text model URI.
      * @param newContent The new content of the model.
      */
-    setModelContent(textModelUri: string, newContent: string) {
+    setModelContent(textModelUri: string, newContent: string, expectedVersionId?: number | null): boolean {
         const modelCtxt = this.getTextModelByUri(textModelUri);
+        if (expectedVersionId != null && modelCtxt.textModel.getVersionId() !== expectedVersionId) {
+            this.logger.debug(
+                `Skipping stale setModelContent for ${textModelUri}. Expected version ${expectedVersionId}, actual ${modelCtxt.textModel.getVersionId()}`
+            );
+            return false;
+        }
+
         modelCtxt.textModel.setValue(newContent);
+        return true;
     }
 
     /**

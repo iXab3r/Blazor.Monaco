@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
 using System.Threading.Tasks;
@@ -16,7 +17,7 @@ namespace BlazorMonacoEditor.Scaffolding
     internal sealed class MonacoTextModelFacade : IAsyncDisposable
     {
         private readonly MonacoInterop interop;
-        private readonly Subject<ModelContentChangedEventArgs> modelContentChangesSink = new();
+        private readonly Subject<MonacoTextModelChange> modelContentChangesSink = new();
         private readonly MonacoTextContainer textContainer;
 
         /// <summary>
@@ -37,9 +38,7 @@ namespace BlazorMonacoEditor.Scaffolding
             var remoteModelChangesSubscription = modelContentChangesSink
                 .Subscribe(x =>
                 {
-                    var currentText = Text;
-                    var updatedText = MonacoRoslynAdapter.ApplyChanges(currentText, x);
-                    textContainer.UpdateText(updatedText); //raise events
+                    textContainer.UpdateText(x.NewText); //raise events
                 });
             Anchors.Add(remoteModelChangesSubscription);
         }
@@ -67,16 +66,36 @@ namespace BlazorMonacoEditor.Scaffolding
         /// Gets the current value of the model.
         /// </summary>
         public SourceText Text => textContainer.CurrentText;
+
+        internal IObservable<MonacoTextModelChange> WhenContentChanged => modelContentChangesSink;
         
         [JSInvokable]
         public void HandleModelContentChanged(ModelContentChangedEventArgs args)
         {
-            modelContentChangesSink.OnNext(args);
+            var currentText = Text;
+            var changes = MonacoRoslynAdapter.PrepareChanges(currentText, args);
+            var updatedText = MonacoRoslynAdapter.ApplyChanges(currentText, changes);
+            modelContentChangesSink.OnNext(new MonacoTextModelChange(args.VersionId, changes, updatedText, args.IsFlush));
         }
 
-        public async ValueTask SetContent(string content)
+        public async ValueTask<bool> SetContent(string content, int? expectedVersionId = null)
         {
-            await interop.SetModelContent(Uri, content);
+            return await interop.SetModelContent(Uri, content, expectedVersionId);
+        }
+
+        public async ValueTask ApplyChanges(IReadOnlyList<IdentifiedSingleEditOperation> operations)
+        {
+            if (operations == null)
+            {
+                throw new ArgumentNullException(nameof(operations));
+            }
+
+            if (operations.Count <= 0)
+            {
+                return;
+            }
+
+            await interop.ExecuteModelEdits(Uri, operations);
         }
 
         public async ValueTask DisposeAsync()

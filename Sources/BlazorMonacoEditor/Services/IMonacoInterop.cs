@@ -18,7 +18,7 @@ public interface IMonacoInterop
 
     ValueTask SetModelMarkers(Uri modelUri, string markersOwner, IReadOnlyList<MarkerData> markers);
 
-    ValueTask SetModelContent(Uri modelUri, string newContent);
+    ValueTask<bool> SetModelContent(Uri modelUri, string newContent, int? expectedVersionId = null);
 
     ValueTask SetModelDecorations(MonacoEditorId editorId, IReadOnlyList<ModelDeltaDecoration> decorations);
 

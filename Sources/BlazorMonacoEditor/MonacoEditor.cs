@@ -1,17 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using System.Reactive.Disposables;
-using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Threading;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
-using BlazorMonacoEditor.Roslyn;
 using BlazorMonacoEditor.Scaffolding;
 using Microsoft.AspNetCore.Components;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 namespace BlazorMonacoEditor;
@@ -19,7 +15,6 @@ namespace BlazorMonacoEditor;
 partial class MonacoEditor : IAsyncDisposable
 {
     private static long editorIdx = 0;
-    private readonly MonacoRoslynAdapter roslynAdapter = new();
     
     /// <summary>
     /// Reason of using observable for it is that Render and Parameters events could be called simultaneously
@@ -145,49 +140,9 @@ partial class MonacoEditor : IAsyncDisposable
         var remoteModel = await MonacoInterop.CreateTextModel(modelUri, actualText, language ?? string.Empty);
         remoteModel.Anchors.Add(Disposable.Create(() => Logger.LogDebug("Remote(Monaco) text model is being been disposed: {remoteModel}", remoteModel)));
 
-        var remoteTextContainer = remoteModel.Text.Container;
-        var remoteTextChangesSubscription = Observable.FromEventPattern<TextChangeEventArgs>(
-            h => remoteTextContainer.TextChanged += h,
-            h => remoteTextContainer.TextChanged -= h
-        )
-        .SubscribeAsync(async (x, token) =>
-        {
-            if (x.EventArgs.Changes.Count <= 0)
-            {
-                return;
-            }
-            
-            await localModel.SetTextAsync(x.EventArgs.NewText, cancellationToken);
-        });
-        remoteModel.Anchors.Add(remoteTextChangesSubscription);
-
         Logger.LogDebug($"Created remote(Monaco) model: {remoteModel}");
-        var localModelChangesSubscription = localModel
-            .WhenChanged
-            .SubscribeAsync(async (x, token) =>
-            {
-                try
-                {
-                    var localText = await localModel.GetTextAsync(token);
-                    var remoteText = remoteModel.Text;
-                    if (localText.ContentEquals(remoteText))
-                    {
-                        return;
-                    }
-                    
-                    var monacoChanges = RoslynChangesAdaptor.PrepareDiff(oldText: remoteText, newText: localText);
-                    if (monacoChanges.Any())
-                    {
-                        await MonacoInterop.ExecuteModelEdits(remoteModel.Uri, monacoChanges);
-                    }
-                }
-                catch (Exception e)
-                {
-                    Logger.LogError($"Failed to apply local changes to remote(Monaco) text model {localModel}", e);
-                    throw;
-                }
-            });
-        remoteModel.Anchors.Add(localModelChangesSubscription);
+        var syncCoordinator = new TextSyncCoordinator(localModel, remoteModel, Logger);
+        remoteModel.Anchors.Add(syncCoordinator);
         remoteModel.Anchors.Add(Disposable.Create(() => Logger.LogDebug("Remote(Monaco) text model has been disposed: {remoteModel}", remoteModel)));
          
         textModelFacadeById[localModel.Id] = remoteModel;

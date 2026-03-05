@@ -7,27 +7,53 @@ namespace BlazorMonacoEditor.Scaffolding;
 
 internal sealed class MonacoRoslynAdapter
 {
-    public static SourceText ApplyChanges(SourceText sourceText, ModelContentChangedEventArgs contentChangedEvent)
+    public static IReadOnlyList<TextChange> PrepareChanges(SourceText sourceText, ModelContentChangedEventArgs contentChangedEvent)
     {
         if (contentChangedEvent.Changes == null || contentChangedEvent.Changes.Count <= 0)
         {
-            return sourceText;
+            return Array.Empty<TextChange>();
         }
-        
-        var result = sourceText;
+
+        var result = new List<TextChange>(contentChangedEvent.Changes.Count);
+        var currentText = sourceText;
         foreach (var change in contentChangedEvent.Changes)
         {
-            result = ApplyChange(result, change);
+            var textChange = PrepareChange(currentText, change);
+            result.Add(textChange);
+            currentText = currentText.WithChanges(textChange);
         }
+
         return result;
     }
 
-    private static SourceText ApplyChange(SourceText sourceText, ModelContentChange change)
+    public static SourceText ApplyChanges(SourceText sourceText, ModelContentChangedEventArgs contentChangedEvent)
+    {
+        var preparedChanges = PrepareChanges(sourceText, contentChangedEvent);
+        return ApplyChanges(sourceText, preparedChanges);
+    }
+
+    public static SourceText ApplyChanges(SourceText sourceText, IReadOnlyList<TextChange> changes)
+    {
+        if (changes == null || changes.Count <= 0)
+        {
+            return sourceText;
+        }
+
+        var result = sourceText;
+        foreach (var change in changes)
+        {
+            result = result.WithChanges(change);
+        }
+
+        return result;
+    }
+
+    private static TextChange PrepareChange(SourceText sourceText, ModelContentChange change)
     {
         var span = GetTextSpanFromRange(sourceText, change.Range);
         var newText = change.Text;
 
-        return sourceText.WithChanges(new TextChange(span, newText));
+        return new TextChange(span, newText);
     }
 
     private static TextSpan GetTextSpanFromRange(SourceText sourceText, MonacoRange range)
