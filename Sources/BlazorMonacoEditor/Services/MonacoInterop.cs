@@ -141,6 +141,13 @@ namespace BlazorMonacoEditor.Services
             return facade;
         }
 
+        public async ValueTask<IAsyncDisposable> RegisterInlayHintsProvider(IInlayHintsProvider inlayHintsProvider)
+        {
+            var facade = new InlayHintsProviderFacade(inlayHintsProvider, logFactory);
+            await InvokeVoidAsync("registerInlayHintsProvider", facade.ObjectReference);
+            return facade;
+        }
+
         public async ValueTask DisposeEditor(MonacoEditorId editorId)
         {
             await InvokeVoidAsync("disposeEditor", editorId);

@@ -74,6 +74,15 @@ internal sealed record GlobalEditorOptions
     public object? SemanticHighlightingEnabled { get; init; }
 
     /// <summary>
+    /// Enables inlay hints in the editor.
+    /// Accepts bool values or the string 'onUnlessPressed'.
+    /// Defaults to true.
+    /// </summary>
+    [JsonPropertyName("inlayHints.enabled")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public object? InlayHintsEnabled { get; init; }
+
+    /// <summary>
     /// Keep peek editors open even when double-clicking their content or when hitting `Escape`.
     /// Defaults to false.
     /// </summary>

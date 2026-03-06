@@ -603,6 +603,33 @@ class MonacoInterop {
         });
     }
 
+    async registerInlayHintsProvider(blazorCallback: IBlazorInteropObject) {
+        this.logger.debug(`Registering new inlay hints provider: ${blazorCallback}`);
+        const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
+        this.logger.debug(`Inlay hints provider language: ${languageId}`);
+
+        monaco.languages.registerInlayHintsProvider(languageId, {
+            provideInlayHints: async (
+                model: monaco.editor.ITextModel,
+                range: monaco.Range,
+                token: monaco.CancellationToken
+            ): Promise<monaco.languages.InlayHintList | null> => {
+                this.logger.trace(`Inlay hints request: ${model.uri}, range: ${range}`);
+                const inlayHints: monaco.languages.InlayHintList = await blazorCallback.invokeMethodAsync("ProvideInlayHints", model.uri, range);
+                if (!inlayHints || !inlayHints.hints) {
+                    this.logger.trace(`Inlay hints are empty`);
+                    return null;
+                }
+
+                return {
+                    hints: inlayHints.hints,
+                    dispose: () => {
+                    }
+                };
+            }
+        });
+    }
+
     prepareActionDescriptor(actionDescriptor: monaco.editor.IActionDescriptor, blazorCallback: IBlazorInteropObject) {
         const action = actionDescriptor;
         action.run = async (editor: monaco.editor.ICodeEditor) => {
