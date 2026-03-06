@@ -290,6 +290,32 @@ namespace BlazorMonacoEditor.Services
             await InvokeVoidAsync("setModelMarkers", modelUri.ToString(), markersOwner, markers);
         }
 
+        /// <summary>
+        /// Shows a transient in-editor notification for editors currently displaying the specified model.
+        /// </summary>
+        /// <param name="modelUri">The model URI used to locate active editors.</param>
+        /// <param name="message">The notification message text.</param>
+        /// <param name="severity">Visual severity hint. Typical values: <c>info</c>, <c>warning</c>, <c>error</c>.</param>
+        /// <param name="timeoutMs">Notification visibility timeout in milliseconds.</param>
+        /// <param name="closeable">When <see langword="true"/>, renders an explicit close affordance in the notification UI.</param>
+        /// <returns>
+        /// <see langword="true"/> when at least one editor displayed the notification; otherwise <see langword="false"/>.
+        /// </returns>
+        public async ValueTask<bool> ShowModelNotification(Uri modelUri, string message, string severity = "warning", int timeoutMs = 4500, bool closeable = false)
+        {
+            if (modelUri is null)
+            {
+                throw new ArgumentNullException(nameof(modelUri));
+            }
+
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                throw new ArgumentException("Notification message cannot be empty", nameof(message));
+            }
+
+            return await InvokeAsync<bool>("showModelNotification", modelUri.ToString(), message, severity, timeoutMs, closeable);
+        }
+
         public async ValueTask SetModelDecorations(MonacoEditorId editorId, IReadOnlyList<ModelDeltaDecoration> decorations)
         {
             await InvokeVoidAsync("setModelDecorations", editorId.ToString(), decorations);

@@ -36,6 +36,8 @@ class MonacoInterop {
     private readonly models: { [uri: string]: ITextModelContext } = {};
     private readonly editorIdByMonacoEditorId: Map<string, string> = new Map<string, string>();
     private readonly editorActionsById: Map<string, monaco.editor.IActionDescriptor> = new Map<string, monaco.editor.IActionDescriptor>();
+    private readonly notificationWidgetsByEditorId: Map<string, monaco.editor.IOverlayWidget> = new Map<string, monaco.editor.IOverlayWidget>();
+    private readonly notificationTimersByEditorId: Map<string, number> = new Map<string, number>();
 
     constructor() {
         if (MonacoInterop.instance) {
@@ -179,6 +181,7 @@ class MonacoInterop {
     disposeEditor(editorId: string) {
         this.logger.debug(`Disposing editor ${editorId}`)
         const editorCtxt = this.getEditorById(editorId);
+        this.clearEditorNotification(editorId);
         this.editors[editorId] = null;
         editorCtxt.codeEditor.dispose();
     }
@@ -299,6 +302,36 @@ class MonacoInterop {
     setModelDecorations(editorId: string, decorations: monaco.editor.IModelDeltaDecoration[]) {
         const editorCtxt = this.getEditorById(editorId);
         let collection = editorCtxt.codeEditor.createDecorationsCollection(decorations);
+    }
+
+    showModelNotification(
+        textModelUri: string,
+        message: string,
+        severity: string = "warning",
+        timeoutMs: number = 4500,
+        closeable: boolean = false
+    ): boolean {
+        if (!message || !message.trim()) {
+            return false;
+        }
+
+        let shown = false;
+        for (const editorId in this.editors) {
+            const editorContext = this.editors[editorId];
+            if (!editorContext) {
+                continue;
+            }
+
+            const model = editorContext.codeEditor.getModel();
+            if (!model || model.uri.toString() !== textModelUri) {
+                continue;
+            }
+
+            this.showEditorNotification(editorContext.codeEditor, editorId, message, severity, timeoutMs, closeable);
+            shown = true;
+        }
+
+        return shown;
     }
 
     /**
@@ -668,6 +701,98 @@ class MonacoInterop {
             await blazorCallback.invokeMethodAsync("HandleExecuted", args);
         };
         return action;
+    }
+
+    private showEditorNotification(
+        editor: monaco.editor.IStandaloneCodeEditor,
+        editorId: string,
+        message: string,
+        severity: string,
+        timeoutMs: number,
+        closeable: boolean
+    ) {
+        const normalizedSeverity = this.normalizeNotificationSeverity(severity);
+        const icon = normalizedSeverity === "error" ? "✕" : normalizedSeverity === "warning" ? "⚠" : "i";
+
+        this.clearEditorNotification(editorId);
+
+        const notificationNode = document.createElement("div");
+        notificationNode.className = `monaco-notification monaco-notification--${normalizedSeverity}`;
+        notificationNode.style.transform = "translate(-12px, -12px)";
+        notificationNode.style.transformOrigin = "bottom right";
+
+        const iconNode = document.createElement("span");
+        iconNode.className = "monaco-notification-icon";
+        iconNode.textContent = icon;
+        notificationNode.appendChild(iconNode);
+
+        const textNode = document.createElement("span");
+        textNode.className = "monaco-notification-text";
+        textNode.textContent = message;
+        notificationNode.appendChild(textNode);
+
+        if (closeable) {
+            const closeButton = document.createElement("button");
+            closeButton.type = "button";
+            closeButton.className = "monaco-notification-close";
+            closeButton.setAttribute("aria-label", "Close notification");
+            closeButton.textContent = "×";
+            closeButton.addEventListener("click", (event: MouseEvent) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.clearEditorNotification(editorId);
+            });
+            notificationNode.appendChild(closeButton);
+        }
+
+        const widget: monaco.editor.IOverlayWidget = {
+            getId: () => `blazor-monaco-notification-${editor.getId()}`,
+            getDomNode: () => notificationNode,
+            getPosition: () => ({
+                preference: monaco.editor.OverlayWidgetPositionPreference.BOTTOM_RIGHT_CORNER
+            })
+        };
+
+        editor.addOverlayWidget(widget);
+        this.notificationWidgetsByEditorId.set(editorId, widget);
+
+        const safeTimeoutMs = Math.max(1500, Math.min(30000, Number.isFinite(timeoutMs) ? timeoutMs : 4500));
+        const timer = window.setTimeout(() => {
+            this.clearEditorNotification(editorId);
+        }, safeTimeoutMs);
+        this.notificationTimersByEditorId.set(editorId, timer);
+    }
+
+    private clearEditorNotification(editorId: string) {
+        const timer = this.notificationTimersByEditorId.get(editorId);
+        if (timer != null) {
+            window.clearTimeout(timer);
+            this.notificationTimersByEditorId.delete(editorId);
+        }
+
+        const notificationWidget = this.notificationWidgetsByEditorId.get(editorId);
+        if (!notificationWidget) {
+            return;
+        }
+
+        const editor = this.editors[editorId]?.codeEditor ?? null;
+        if (editor) {
+            editor.removeOverlayWidget(notificationWidget);
+        }
+        this.notificationWidgetsByEditorId.delete(editorId);
+    }
+
+    private normalizeNotificationSeverity(severity: string): "info" | "warning" | "error" {
+        if (!severity) {
+            return "warning";
+        }
+
+        const normalized = severity.toLowerCase();
+        if (normalized === "error" || normalized === "warning" || normalized === "info") {
+            return normalized;
+        }
+
+        return "warning";
     }
 }
 

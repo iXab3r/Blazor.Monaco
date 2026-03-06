@@ -24,6 +24,8 @@ public interface IMonacoInterop
 
     ValueTask SetModelMarkers(Uri modelUri, string markersOwner, IReadOnlyList<MarkerData> markers);
 
+    ValueTask<bool> ShowModelNotification(Uri modelUri, string message, string severity = "warning", int timeoutMs = 4500, bool closeable = false);
+
     ValueTask<bool> SetModelContent(Uri modelUri, string newContent, int? expectedVersionId = null);
 
     ValueTask SetModelDecorations(MonacoEditorId editorId, IReadOnlyList<ModelDeltaDecoration> decorations);

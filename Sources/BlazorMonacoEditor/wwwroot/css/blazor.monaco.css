@@ -6,3 +6,69 @@
 .monaco-editor .suggest-widget > .message {
     font-size: 12px;
 }
+
+.monaco-notification {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: start;
+    gap: 8px;
+    max-width: min(72vw, 560px);
+    margin: 0;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: #cccccc;
+    background: rgba(37, 37, 38, 0.96);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.32);
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: auto;
+}
+
+.monaco-notification-icon {
+    font-size: 12px;
+    font-weight: 700;
+    color: #b0b0b0;
+    margin-top: 1px;
+}
+
+.monaco-notification-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.monaco-notification--info .monaco-notification-icon {
+    color: #75beff;
+}
+
+.monaco-notification--warning .monaco-notification-icon {
+    color: #d7ba7d;
+}
+
+.monaco-notification--error .monaco-notification-icon {
+    color: #f48771;
+}
+
+.monaco-notification-close {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: #8f8f8f;
+    width: 18px;
+    height: 18px;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 3px;
+    font-size: 14px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.monaco-notification-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #d4d4d4;
+}
+
+.monaco-notification-close:focus-visible {
+    outline: 1px solid #5a9dd9;
+    outline-offset: 1px;
+}
