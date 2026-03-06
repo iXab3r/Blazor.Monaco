@@ -120,6 +120,13 @@ namespace BlazorMonacoEditor.Services
             return facade;
         }
 
+        public async ValueTask<IAsyncDisposable> RegisterDefinitionProvider(IDefinitionProvider definitionProvider)
+        {
+            var facade = new DefinitionProviderFacade(definitionProvider, logFactory);
+            await InvokeVoidAsync("registerDefinitionProvider", facade.ObjectReference);
+            return facade;
+        }
+
         public async ValueTask<IAsyncDisposable> RegisterCodeActionProvider(ICodeActionProvider codeActionProvider)
         {
             var facade = new CodeActionProviderFacade(codeActionProvider);

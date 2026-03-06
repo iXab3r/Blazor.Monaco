@@ -514,6 +514,28 @@ class MonacoInterop {
         });
     }
 
+    async registerDefinitionProvider(blazorCallback: IBlazorInteropObject) {
+        this.logger.debug(`Registering new definition provider: ${blazorCallback}`);
+        const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
+        this.logger.debug(`Definition provider language: ${languageId}`);
+
+        monaco.languages.registerDefinitionProvider(languageId, {
+            provideDefinition: async (model: monaco.editor.ITextModel, position: monaco.Position, token: monaco.CancellationToken) => {
+                this.logger.trace(`Code definition request: ${model.uri}, position: ${position}`);
+                const definition: any = await blazorCallback.invokeMethodAsync("ProvideDefinition", model.uri, position);
+                if (!definition || !definition.uri || !definition.range) {
+                    this.logger.trace(`Code definition is empty`);
+                    return null;
+                }
+
+                return {
+                    uri: monaco.Uri.parse(definition.uri),
+                    range: definition.range
+                };
+            }
+        });
+    }
+
     async registerCompletionProvider(blazorCallback: IBlazorInteropObject) {
         this.logger.debug(`Registering new completion provider: ${blazorCallback}`);
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");

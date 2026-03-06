@@ -14,6 +14,8 @@ public interface IMonacoInterop
     
     ValueTask<IAsyncDisposable> RegisterHoverProvider(IHoverProvider hoverProvider);
 
+    ValueTask<IAsyncDisposable> RegisterDefinitionProvider(IDefinitionProvider definitionProvider);
+
     ValueTask<IAsyncDisposable> RegisterSignatureHelpProvider(ISignatureHelpProvider signatureHelpProvider);
 
     ValueTask<IAsyncDisposable> RegisterSemanticTokensProvider(ISemanticTokensProvider semanticTokensProvider);
