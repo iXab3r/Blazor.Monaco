@@ -21,6 +21,22 @@ public sealed record EditorOptions
     public bool? OriginalEditable { get; set; }
 
     /// <summary>
+    /// Controls whether the diff editor renders both panes side by side.
+    /// Defaults to true.
+    /// </summary>
+    [JsonPropertyName("renderSideBySide")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool? RenderSideBySide { get; set; }
+
+    /// <summary>
+    /// Controls whether Monaco may fall back to inline diff view when space is limited.
+    /// Defaults to true.
+    /// </summary>
+    [JsonPropertyName("useInlineViewWhenSpaceIsLimited")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool? UseInlineViewWhenSpaceIsLimited { get; set; }
+
+    /// <summary>
     /// The aria label for the editor's textarea (when it is focused).
     /// </summary>
     [JsonPropertyName("ariaLabel")]

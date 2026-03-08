@@ -127,6 +127,18 @@ partial class MonacoDiffEditor : IAsyncDisposable
     [Parameter] public bool OriginalEditable { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the diff editor should render two panes side by side.
+    /// Defaults to <see langword="true"/>.
+    /// </summary>
+    [Parameter] public bool RenderSideBySide { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether Monaco may collapse to inline diff mode when there is not enough space.
+    /// Defaults to <see langword="true"/>.
+    /// </summary>
+    [Parameter] public bool UseInlineViewWhenSpaceIsLimited { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets whether semantic highlighting is enabled for this diff editor instance.
     /// Defaults to <see langword="true"/>.
     /// </summary>
@@ -279,6 +291,8 @@ partial class MonacoDiffEditor : IAsyncDisposable
             FixedOverflowWidgets = true,
             InDiffEditor = true,
             OriginalEditable = OriginalEditable,
+            RenderSideBySide = RenderSideBySide,
+            UseInlineViewWhenSpaceIsLimited = UseInlineViewWhenSpaceIsLimited,
             LineNumbers = ShowLineNumbers ? "on" : "off",
             LineNumbersMinChars = LineNumbersMinChars,
             GlyphMargin = true,
