@@ -11,6 +11,11 @@
         <EnableDefaultContentItems>true<!-- Important for Blazor Scoped CSS --></EnableDefaultContentItems>
     </PropertyGroup>
 
+    <PropertyGroup>
+        <NpmInstallStamp>node_modules\.npm-install.stamp</NpmInstallStamp>
+        <FrontendBuildStamp>wwwroot\js\.frontend-build.stamp</FrontendBuildStamp>
+    </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.Components" Version="[7.0.2,]"/>
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="[7.0.2,]"/>
@@ -44,18 +49,25 @@
         </Content>
     </ItemGroup>
 
-    <Target Name="NPMInstall" AfterTargets="PreBuildEvent">
+    <ItemGroup>
+        <NpmInstallInputs Include="package.json;package-lock.json" />
+        <FrontendBuildInputs Include="wwwroot\**\*" Exclude="wwwroot\js\**" />
+        <FrontendBuildInputs Include="tsconfig.json;package.json;package-lock.json;webpack.common.js;webpack.dev.js;webpack.prod.js" />
+    </ItemGroup>
+
+    <Target Name="NPMInstall" AfterTargets="PreBuildEvent" Inputs="@(NpmInstallInputs)" Outputs="$(NpmInstallStamp)">
         <Message Importance="high" Text="Running NPM Install" />
         <Exec Command="npm install"/>
+        <Touch Files="$(NpmInstallStamp)" AlwaysCreate="true" />
         <Message Importance="high" Text="Completed NPM Install" />
     </Target>
 
-    <Target Name="WebpackBuild" AfterTargets="NPMInstall">
+    <Target Name="WebpackBuild" AfterTargets="NPMInstall" Inputs="@(FrontendBuildInputs)" Outputs="$(FrontendBuildStamp)">
         <Message Importance="high" Text="Running NPM Webpack Build" />
         <Exec Command="npm run build-dev" Condition="$(Configuration) == 'Debug'"/>
         <Exec Command="npm run build-prod" Condition="$(Configuration) == 'Release'"/>
         <ItemGroup>
-            <JSFiles Include="wwwroot/js/**">
+            <JSFiles Include="wwwroot/js/**" Exclude="$(FrontendBuildStamp)">
                 <!-- Include TypeScript JS into file list, this is needed to allow for StaticWebAssets resolution -->
             </JSFiles>
         </ItemGroup>
@@ -64,6 +76,7 @@
         <ItemGroup>
             <Content Include="@(JSFiles)"/>
         </ItemGroup>
+        <Touch Files="$(FrontendBuildStamp)" AlwaysCreate="true" />
         <Message Importance="high" Text="Completed NPM Webpack Build" />
     </Target>
 
