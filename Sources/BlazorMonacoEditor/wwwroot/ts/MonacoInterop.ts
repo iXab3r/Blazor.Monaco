@@ -25,6 +25,24 @@ interface IMonacoActionArgs {
     editorId: string,
 }
 
+interface IMonacoRuntimeModelSnapshot {
+    uri: string,
+    languageId: string,
+    versionId: number,
+}
+
+interface IMonacoRuntimeEditorSnapshot {
+    id: string,
+    modelUri?: string,
+}
+
+interface IMonacoRuntimeSnapshot {
+    editors: IMonacoRuntimeEditorSnapshot[],
+    diffEditors: IMonacoRuntimeEditorSnapshot[],
+    models: IMonacoRuntimeModelSnapshot[],
+    editorActionIds: string[],
+}
+
 class MonacoInterop {
 
     private static instance: MonacoInterop;
@@ -38,6 +56,7 @@ class MonacoInterop {
     private readonly editorActionsById: Map<string, monaco.editor.IActionDescriptor> = new Map<string, monaco.editor.IActionDescriptor>();
     private readonly notificationWidgetsByEditorId: Map<string, monaco.editor.IOverlayWidget> = new Map<string, monaco.editor.IOverlayWidget>();
     private readonly notificationTimersByEditorId: Map<string, number> = new Map<string, number>();
+    private providerRegistrationSequence = 0;
 
     constructor() {
         if (MonacoInterop.instance) {
@@ -93,14 +112,6 @@ class MonacoInterop {
 
         this.addDuplicateLineCommand(newEditor);
 
-        const editorContext: IEditorContext = {
-            editorId: editorId,
-            codeEditor: newEditor,
-            updating: false,
-            eventHandler: new EditorEventHandler(blazorCallback),
-            eventSink: blazorCallback
-        };
-
         const resizeObserver = new ResizeObserver(() => {
             if (newEditor) {
                 newEditor.layout();
@@ -108,8 +119,17 @@ class MonacoInterop {
         });
         resizeObserver.observe(container);
 
+        const editorContext: IEditorContext = {
+            editorId: editorId,
+            codeEditor: newEditor,
+            resizeObserver: resizeObserver,
+            updating: false,
+            eventHandler: new EditorEventHandler(blazorCallback),
+            eventSink: blazorCallback
+        };
+
         this.editors[editorId] = editorContext;
-        this.editorIdByMonacoEditorId[newEditor.getId()] = editorId;
+        this.editorIdByMonacoEditorId.set(newEditor.getId(), editorId);
     }
 
     /**
@@ -127,14 +147,6 @@ class MonacoInterop {
         });
         this.logger.debug(`Created diff editor with Id ${editorId}`);
 
-        const editorContext: IDiffEditorContext = {
-            editorId: editorId,
-            diffEditor: newEditor,
-            updating: false,
-            eventHandler: new EditorEventHandler(blazorCallback),
-            eventSink: blazorCallback
-        };
-
         const resizeObserver = new ResizeObserver(() => {
             if (newEditor) {
                 this.logger.debug(`Resizing diff editor ${editorId}`);
@@ -142,6 +154,15 @@ class MonacoInterop {
             }
         });
         resizeObserver.observe(container);
+
+        const editorContext: IDiffEditorContext = {
+            editorId: editorId,
+            diffEditor: newEditor,
+            resizeObserver: resizeObserver,
+            updating: false,
+            eventHandler: new EditorEventHandler(blazorCallback),
+            eventSink: blazorCallback
+        };
 
         this.diffEditors[editorId] = editorContext;
     }
@@ -182,14 +203,19 @@ class MonacoInterop {
         this.logger.debug(`Disposing editor ${editorId}`)
         const editorCtxt = this.getEditorById(editorId);
         this.clearEditorNotification(editorId);
-        this.editors[editorId] = null;
+        this.editorIdByMonacoEditorId.delete(editorCtxt.codeEditor.getId());
+        delete this.editors[editorId];
+        editorCtxt.resizeObserver?.disconnect();
+        (editorCtxt.eventSink as any)?.dispose?.();
         editorCtxt.codeEditor.dispose();
     }
 
     disposeDiffEditor(editorId: string) {
         this.logger.debug(`Disposing diff editor ${editorId}`);
         const editorCtxt = this.getDiffEditorById(editorId);
-        this.diffEditors[editorId] = null;
+        delete this.diffEditors[editorId];
+        editorCtxt.resizeObserver?.disconnect();
+        (editorCtxt.eventSink as any)?.dispose?.();
         editorCtxt.diffEditor.dispose();
     }
 
@@ -256,20 +282,40 @@ class MonacoInterop {
      * @param language The ID of the model's language.
      */
     createTextModel(uri: string, value: string, blazorCallback: IBlazorInteropObject, language?: string) {
+        return this.createOrAttachTextModel(uri, value, blazorCallback, language);
+    }
+
+    createOrAttachTextModel(uri: string, value: string, blazorCallback: IBlazorInteropObject, language?: string): IMonacoRuntimeModelSnapshot {
         this.logger.debug(`Creating text model with Uri ${uri}, language: ${language}, .net callback: ${blazorCallback}`);
 
         const monacoUri = monaco.Uri.parse(uri);
-        const model = monaco.editor.createModel(value, language, monacoUri);
+        const normalizedLanguage = language || undefined;
+        const existingContext = this.models[uri];
+        if (existingContext) {
+            if (normalizedLanguage && existingContext.textModel.getLanguageId() !== normalizedLanguage) {
+                monaco.editor.setModelLanguage(existingContext.textModel, normalizedLanguage);
+            }
+
+            return this.createModelSnapshot(existingContext.textModel);
+        }
+
+        const existingModel = monaco.editor.getModel(monacoUri);
+        const ownsModel = !existingModel;
+        const model = existingModel ?? monaco.editor.createModel(value, normalizedLanguage, monacoUri);
+        if (existingModel && normalizedLanguage && existingModel.getLanguageId() !== normalizedLanguage) {
+            monaco.editor.setModelLanguage(existingModel, normalizedLanguage);
+        }
 
         const modelContext: ITextModelContext = {
             textModel: model,
+            ownsModel: ownsModel,
             changeTimer: 0,
             updating: false,
             eventHandler: new TextModelEventHandler(blazorCallback),
             eventSink: blazorCallback
         };
 
-        model.onDidChangeContent(ev => {
+        modelContext.changeAnchor = model.onDidChangeContent(ev => {
 
             ev.isEolChange
             modelContext.eventHandler.handleModelContentChanged(ev);
@@ -277,6 +323,7 @@ class MonacoInterop {
 
         this.models[uri] = modelContext;
         this.logger.debug(`Created text model with Uri ${uri}, Id: ${model.id}`);
+        return this.createModelSnapshot(model);
     }
 
     disposeTextModel(textModelUri: string) {
@@ -284,8 +331,11 @@ class MonacoInterop {
 
         const modelCtxt = this.getTextModelByUri(textModelUri);
 
-        this.models[textModelUri] = null;
-        modelCtxt.textModel.dispose();
+        delete this.models[textModelUri];
+        modelCtxt.changeAnchor?.dispose();
+        if (modelCtxt.ownsModel) {
+            modelCtxt.textModel.dispose();
+        }
         this.logger.debug(`Disposed text model with Uri ${textModelUri}, id: ${modelCtxt.textModel.id}`);
     }
 
@@ -358,6 +408,10 @@ class MonacoInterop {
      * @param languageId LanguageId
      */
     setEditorModelLanguage(textModelUri: string, languageId: string) {
+        this.setModelLanguage(textModelUri, languageId);
+    }
+
+    setModelLanguage(textModelUri: string, languageId: string) {
         const modelCtxt = this.getTextModelByUri(textModelUri);
         monaco.editor.setModelLanguage(modelCtxt.textModel, languageId);
     }
@@ -427,8 +481,13 @@ class MonacoInterop {
         this.logger.debug(`Adding new action(total:${this.editorActionsById.size}) to ALL Editors: ${JSON.stringify(actionDescriptor)}`);
 
         const anchor = monaco.editor.addEditorAction(action);
-        this.editorActionsById.set(actionDescriptor.id, actionDescriptor);
-        return anchor;
+        this.editorActionsById.set(action.id, action);
+        return this.createDisposable(() => {
+            anchor.dispose();
+            if (this.editorActionsById.get(action.id) === action) {
+                this.editorActionsById.delete(action.id);
+            }
+        });
     }
 
     /**
@@ -444,7 +503,7 @@ class MonacoInterop {
         this.logger.debug(`Adding new action to SPECIFIC editor ${editorId}: ${JSON.stringify(actionDescriptor)}`);
 
         const anchor = editor.codeEditor.addAction(action);
-        return anchor;
+        return this.createDisposable(() => anchor.dispose());
     }
 
     /**
@@ -493,11 +552,12 @@ class MonacoInterop {
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         this.logger.debug(`Code action provider language: ${languageId}`);
 
-        monaco.editor.registerCommand("BlazorQuickFixApplyCommand", async function (editor, ...args) {
+        const commandId = `BlazorQuickFixApplyCommand.${++this.providerRegistrationSequence}`;
+        const commandAnchor = monaco.editor.registerCommand(commandId, async function (editor, ...args) {
             await blazorCallback.invokeMethodAsync("ApplyCodeAction", args);
         });
 
-        monaco.languages.registerCodeActionProvider(languageId, {
+        const providerAnchor = monaco.languages.registerCodeActionProvider(languageId, {
             provideCodeActions: async (
                 model: monaco.editor.ITextModel,
                 range: monaco.Range,
@@ -510,9 +570,23 @@ class MonacoInterop {
                     this.logger.trace(`Code action list is empty`);
                     return null;
                 }
-                this.logger.trace(`Code action list received: ${codeActionList.actions.length}`);
+                const sourceActions = codeActionList.actions ?? [];
+                this.logger.trace(`Code action list received: ${sourceActions.length}`);
+                const actions = sourceActions.map(action => {
+                    if (!action.command) {
+                        return action;
+                    }
+
+                    return {
+                        ...action,
+                        command: {
+                            ...action.command,
+                            id: commandId
+                        }
+                    };
+                }) ?? [];
                 return {
-                    actions: codeActionList.actions,
+                    actions: actions,
                     dispose: () => {
                     }
                 };
@@ -526,6 +600,10 @@ class MonacoInterop {
                 return resolvedCodeAction;
             }
         });
+        return this.createDisposable(() => {
+            providerAnchor.dispose();
+            commandAnchor.dispose();
+        });
     }
 
     async registerHoverProvider(blazorCallback: IBlazorInteropObject) {
@@ -533,7 +611,7 @@ class MonacoInterop {
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         this.logger.debug(`Hover provider language: ${languageId}`);
 
-        monaco.languages.registerHoverProvider(languageId, {
+        const providerAnchor = monaco.languages.registerHoverProvider(languageId, {
             provideHover: async (model: monaco.editor.ITextModel, position: monaco.Position, token: monaco.CancellationToken) => {
                 this.logger.trace(`Code hover request: ${model.uri}, position: ${position}`);
                 const hover: monaco.languages.Hover = await blazorCallback.invokeMethodAsync("ProvideHover", model.uri, position);
@@ -545,6 +623,7 @@ class MonacoInterop {
                 return hover;
             }
         });
+        return this.createDisposable(() => providerAnchor.dispose());
     }
 
     async registerDefinitionProvider(blazorCallback: IBlazorInteropObject) {
@@ -552,7 +631,7 @@ class MonacoInterop {
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         this.logger.debug(`Definition provider language: ${languageId}`);
 
-        monaco.languages.registerDefinitionProvider(languageId, {
+        const providerAnchor = monaco.languages.registerDefinitionProvider(languageId, {
             provideDefinition: async (model: monaco.editor.ITextModel, position: monaco.Position, token: monaco.CancellationToken) => {
                 this.logger.trace(`Code definition request: ${model.uri}, position: ${position}`);
                 const definition: any = await blazorCallback.invokeMethodAsync("ProvideDefinition", model.uri, position);
@@ -567,6 +646,7 @@ class MonacoInterop {
                 };
             }
         });
+        return this.createDisposable(() => providerAnchor.dispose());
     }
 
     async registerCompletionProvider(blazorCallback: IBlazorInteropObject) {
@@ -575,7 +655,7 @@ class MonacoInterop {
         const triggerCharacters: string[] = await blazorCallback.invokeMethodAsync("GetTriggerCharacters");
         this.logger.debug(`Completion provider language: ${languageId}, trigger characters: ${JSON.stringify(triggerCharacters)}`);
 
-        monaco.languages.registerCompletionItemProvider(languageId, {
+        const providerAnchor = monaco.languages.registerCompletionItemProvider(languageId, {
             provideCompletionItems: async (model: monaco.editor.ITextModel, position: monaco.IPosition, completionContext: monaco.languages.CompletionContext) => {
                 const caretOffset = model.getOffsetAt(position);
                 this.logger.trace(`Completion request: ${model.uri}, context: ${completionContext}, position: ${position}, caretOffset: ${caretOffset}`);
@@ -593,6 +673,7 @@ class MonacoInterop {
             },
             triggerCharacters: triggerCharacters
         });
+        return this.createDisposable(() => providerAnchor.dispose());
     }
 
     async registerSignatureHelpProvider(blazorCallback: IBlazorInteropObject) {
@@ -602,7 +683,7 @@ class MonacoInterop {
         const retriggerCharacters: string[] = await blazorCallback.invokeMethodAsync("GetRetriggerCharacters");
         this.logger.debug(`Signature help provider language: ${languageId}, trigger characters: ${JSON.stringify(triggerCharacters)}, retrigger characters: ${JSON.stringify(retriggerCharacters)}, `);
 
-        monaco.languages.registerSignatureHelpProvider(languageId, {
+        const providerAnchor = monaco.languages.registerSignatureHelpProvider(languageId, {
             provideSignatureHelp: async (model: monaco.editor.ITextModel, position: monaco.Position, token: monaco.CancellationToken, context: monaco.languages.SignatureHelpContext) => {
                 this.logger.trace(`Code signature help request: ${model.uri}, position: ${position}, context: ${context}`);
                 const signatureHelp: monaco.languages.SignatureHelp = await blazorCallback.invokeMethodAsync("ProvideSignatureHelp", model.uri, context, position);
@@ -620,6 +701,7 @@ class MonacoInterop {
             signatureHelpTriggerCharacters: triggerCharacters,
             signatureHelpRetriggerCharacters: retriggerCharacters
         });
+        return this.createDisposable(() => providerAnchor.dispose());
     }
 
     async registerSemanticTokensProvider(blazorCallback: IBlazorInteropObject) {
@@ -630,7 +712,7 @@ class MonacoInterop {
             `Semantic tokens provider language: ${languageId}, tokenTypes: ${JSON.stringify(semanticLegend?.tokenTypes ?? [])}, tokenModifiers: ${JSON.stringify(semanticLegend?.tokenModifiers ?? [])}`
         );
 
-        monaco.languages.registerDocumentSemanticTokensProvider(languageId, {
+        const providerAnchor = monaco.languages.registerDocumentSemanticTokensProvider(languageId, {
             getLegend: (): monaco.languages.SemanticTokensLegend => {
                 return semanticLegend;
             },
@@ -656,6 +738,7 @@ class MonacoInterop {
                 await blazorCallback.invokeMethodAsync("ReleaseDocumentSemanticTokens", normalizedResultId);
             }
         });
+        return this.createDisposable(() => providerAnchor.dispose());
     }
 
     async registerInlayHintsProvider(blazorCallback: IBlazorInteropObject) {
@@ -663,7 +746,7 @@ class MonacoInterop {
         const languageId: string = await blazorCallback.invokeMethodAsync("GetLanguage");
         this.logger.debug(`Inlay hints provider language: ${languageId}`);
 
-        monaco.languages.registerInlayHintsProvider(languageId, {
+        const providerAnchor = monaco.languages.registerInlayHintsProvider(languageId, {
             provideInlayHints: async (
                 model: monaco.editor.ITextModel,
                 range: monaco.Range,
@@ -683,6 +766,7 @@ class MonacoInterop {
                 };
             }
         });
+        return this.createDisposable(() => providerAnchor.dispose());
     }
 
     prepareActionDescriptor(actionDescriptor: monaco.editor.IActionDescriptor, blazorCallback: IBlazorInteropObject) {
@@ -691,16 +775,84 @@ class MonacoInterop {
             let model = editor.getModel();
             const caretPosition = editor.getPosition();
             const caretOffset = model.getOffsetAt(caretPosition);
-            const editorId = this.editorIdByMonacoEditorId[editor.getId()];
+            const editorId = this.editorIdByMonacoEditorId.get(editor.getId());
             const args: IMonacoActionArgs = {
                 modelUri: model.uri,
                 caretPosition: caretPosition,
                 caretOffset: caretOffset,
-                editorId: editorId
+                editorId: editorId ?? ""
             };
             await blazorCallback.invokeMethodAsync("HandleExecuted", args);
         };
         return action;
+    }
+
+    getRuntimeSnapshot(): IMonacoRuntimeSnapshot {
+        const editors: IMonacoRuntimeEditorSnapshot[] = [];
+        for (const editorId in this.editors) {
+            const editorContext = this.editors[editorId];
+            if (!editorContext) {
+                continue;
+            }
+
+            editors.push({
+                id: editorId,
+                modelUri: editorContext.codeEditor.getModel()?.uri.toString()
+            });
+        }
+
+        const diffEditors: IMonacoRuntimeEditorSnapshot[] = [];
+        for (const editorId in this.diffEditors) {
+            const editorContext = this.diffEditors[editorId];
+            if (!editorContext) {
+                continue;
+            }
+
+            const model = editorContext.diffEditor.getModel();
+            diffEditors.push({
+                id: editorId,
+                modelUri: model?.modified?.uri.toString()
+            });
+        }
+
+        const models: IMonacoRuntimeModelSnapshot[] = [];
+        for (const modelUri in this.models) {
+            const modelContext = this.models[modelUri];
+            if (!modelContext) {
+                continue;
+            }
+
+            models.push(this.createModelSnapshot(modelContext.textModel));
+        }
+
+        return {
+            editors,
+            diffEditors,
+            models,
+            editorActionIds: Array.from(this.editorActionsById.keys())
+        };
+    }
+
+    private createModelSnapshot(model: monaco.editor.ITextModel): IMonacoRuntimeModelSnapshot {
+        return {
+            uri: model.uri.toString(),
+            languageId: model.getLanguageId(),
+            versionId: model.getVersionId()
+        };
+    }
+
+    private createDisposable(dispose: () => void) {
+        let isDisposed = false;
+        return {
+            dispose: () => {
+                if (isDisposed) {
+                    return;
+                }
+
+                isDisposed = true;
+                dispose();
+            }
+        };
     }
 
     private showEditorNotification(
@@ -797,4 +949,6 @@ class MonacoInterop {
 }
 
 console.info("MonacoInterop.ts loaded");
-window['monacoInterop'] = new MonacoInterop();
+const eyeAurasWindow = window as any;
+eyeAurasWindow.__eyeAurasMonacoInterop = eyeAurasWindow.__eyeAurasMonacoInterop ?? new MonacoInterop();
+window['monacoInterop'] = eyeAurasWindow.__eyeAurasMonacoInterop;

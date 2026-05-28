@@ -101,7 +101,7 @@ namespace BlazorMonacoEditor.Services
                 LanguageId = languageId,
             };
 
-            await InvokeVoidAsync("createTextModel", textModel.Uri.ToString(), textModel.InitialText.ToString(), textModel.ObjectReference, textModel.LanguageId);
+            await InvokeAsync<MonacoRuntimeModelSnapshot>("createOrAttachTextModel", textModel.Uri.ToString(), textModel.InitialText.ToString(), textModel.ObjectReference, textModel.LanguageId ?? string.Empty);
 
             return textModel;
         }
@@ -109,50 +109,61 @@ namespace BlazorMonacoEditor.Services
         public async ValueTask<IAsyncDisposable> RegisterCompletionProvider(ICompletionProvider completionProvider)
         {
             var facade = new CompletionProviderFacade(completionProvider, logFactory);
-            await InvokeVoidAsync("registerCompletionProvider", facade.ObjectReference);
-            return facade;
+            return await RegisterProvider("registerCompletionProvider", facade, facade.ObjectReference);
         }
 
         public async ValueTask<IAsyncDisposable> RegisterHoverProvider(IHoverProvider hoverProvider)
         {
             var facade = new HoverProviderFacade(hoverProvider);
-            await InvokeVoidAsync("registerHoverProvider", facade.ObjectReference);
-            return facade;
+            return await RegisterProvider("registerHoverProvider", facade, facade.ObjectReference);
         }
 
         public async ValueTask<IAsyncDisposable> RegisterDefinitionProvider(IDefinitionProvider definitionProvider)
         {
             var facade = new DefinitionProviderFacade(definitionProvider, logFactory);
-            await InvokeVoidAsync("registerDefinitionProvider", facade.ObjectReference);
-            return facade;
+            return await RegisterProvider("registerDefinitionProvider", facade, facade.ObjectReference);
         }
 
         public async ValueTask<IAsyncDisposable> RegisterCodeActionProvider(ICodeActionProvider codeActionProvider)
         {
             var facade = new CodeActionProviderFacade(codeActionProvider);
-            await InvokeVoidAsync("registerCodeActionProvider", facade.ObjectReference);
-            return facade;
+            return await RegisterProvider("registerCodeActionProvider", facade, facade.ObjectReference);
         }
 
         public async ValueTask<IAsyncDisposable> RegisterSignatureHelpProvider(ISignatureHelpProvider signatureHelpProvider)
         {
             var facade = new SignatureHelpProviderFacade(signatureHelpProvider, Log);
-            await InvokeVoidAsync("registerSignatureHelpProvider", facade.ObjectReference);
-            return facade;
+            return await RegisterProvider("registerSignatureHelpProvider", facade, facade.ObjectReference);
         }
 
         public async ValueTask<IAsyncDisposable> RegisterSemanticTokensProvider(ISemanticTokensProvider semanticTokensProvider)
         {
             var facade = new SemanticTokensProviderFacade(semanticTokensProvider, logFactory);
-            await InvokeVoidAsync("registerSemanticTokensProvider", facade.ObjectReference);
-            return facade;
+            return await RegisterProvider("registerSemanticTokensProvider", facade, facade.ObjectReference);
         }
 
         public async ValueTask<IAsyncDisposable> RegisterInlayHintsProvider(IInlayHintsProvider inlayHintsProvider)
         {
             var facade = new InlayHintsProviderFacade(inlayHintsProvider, logFactory);
-            await InvokeVoidAsync("registerInlayHintsProvider", facade.ObjectReference);
-            return facade;
+            return await RegisterProvider("registerInlayHintsProvider", facade, facade.ObjectReference);
+        }
+
+        private async ValueTask<IAsyncDisposable> RegisterProvider<TFacade>(
+            string methodName,
+            TFacade facade,
+            DotNetObjectReference<TFacade> objectReference)
+            where TFacade : class, IAsyncDisposable
+        {
+            try
+            {
+                var anchor = await InvokeAsync<IJSObjectReference>(methodName, objectReference);
+                return new MonacoProviderRegistration(facade, new MonacoDisposable(anchor));
+            }
+            catch
+            {
+                await facade.DisposeJsSafeAsync();
+                throw;
+            }
         }
 
         public async ValueTask DisposeEditor(MonacoEditorId editorId)
@@ -288,6 +299,26 @@ namespace BlazorMonacoEditor.Services
             }
 
             await InvokeVoidAsync("setModelMarkers", modelUri.ToString(), markersOwner, markers);
+        }
+
+        public async ValueTask SetModelLanguage(Uri modelUri, string languageId)
+        {
+            if (modelUri is null)
+            {
+                throw new ArgumentNullException(nameof(modelUri));
+            }
+
+            if (string.IsNullOrWhiteSpace(languageId))
+            {
+                return;
+            }
+
+            await InvokeVoidAsync("setModelLanguage", modelUri.ToString(), languageId);
+        }
+
+        public async ValueTask<MonacoRuntimeSnapshot> GetRuntimeSnapshot()
+        {
+            return await InvokeAsync<MonacoRuntimeSnapshot>("getRuntimeSnapshot");
         }
 
         /// <summary>

@@ -7,8 +7,10 @@ import { TextModelEventHandler } from './TextModelEventHandler';
  */
 export interface ITextModelContext {
     textModel: editor.ITextModel;
+    ownsModel: boolean;
     updating: boolean;
     changeTimer: any;
+    changeAnchor?: { dispose(): void };
     eventHandler?: TextModelEventHandler;
     eventSink?: IBlazorInteropObject;
 }

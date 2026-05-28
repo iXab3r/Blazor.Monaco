@@ -1,5 +1,6 @@
 ﻿using BlazorMonacoEditor.Roslyn.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BlazorMonacoEditor.Roslyn
 {
@@ -13,7 +14,7 @@ namespace BlazorMonacoEditor.Roslyn
         /// </summary>
         public static IServiceCollection AddMonacoRoslyn(this IServiceCollection services)
         {
-            services.AddScoped<IRoslynCompletionProvider, RoslynCompletionProvider>();
+            services.TryAddScoped<IRoslynCompletionProvider, RoslynCompletionProvider>();
             return services;
         }
     }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Services;
@@ -33,6 +34,7 @@ public sealed class MonacoActionFacade : IAsyncDisposable
     public Func<MonacoActionArgs, Task>  ActionToExecute { get; init; }
     
     private MonacoDisposable Anchor { get; set; }
+    private int isDisposed;
     
     public static async Task<MonacoActionFacade> Create(IMonacoInterop interop, MonacoEditorId editorId, ActionDescriptor descriptor, Func<MonacoActionArgs, Task> actionToExecute)
     {
@@ -58,7 +60,18 @@ public sealed class MonacoActionFacade : IAsyncDisposable
     
     public async ValueTask DisposeAsync()
     {
-        await Anchor.DisposeJsSafeAsync();
-        ObjectReference.DisposeJsSafe();
+        if (Interlocked.Exchange(ref isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Anchor.DisposeJsSafeAsync();
+        }
+        finally
+        {
+            ObjectReference.DisposeJsSafe();
+        }
     }
 }

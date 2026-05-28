@@ -32,6 +32,8 @@ public class RoslynCompletionProvider : IRoslynCompletionProvider
     private readonly ConcurrentDictionary<Workspace, int> workspaces = new();
     private readonly IMonacoInterop monacoInterop;
     private IAsyncDisposable? registrationAnchor;
+    private Task<IAsyncDisposable>? registrationTask;
+    private int isDisposed;
     private long completionRevision;
     
     public RoslynCompletionProvider(IMonacoInterop monacoInterop, ILoggerFactory logFactory)
@@ -175,39 +177,88 @@ public class RoslynCompletionProvider : IRoslynCompletionProvider
     
     public async Task Register()
     {
-        if (registrationAnchor != null)
+        if (Volatile.Read(ref isDisposed) != 0)
         {
             return;
         }
 
-        registrationAnchor = await monacoInterop.RegisterCompletionProvider(this);
+        var existingTask = Volatile.Read(ref registrationTask);
+        if (existingTask != null)
+        {
+            await StoreRegistration(await existingTask.ConfigureAwait(false)).ConfigureAwait(false);
+            return;
+        }
+
+        var registrationTcs = new TaskCompletionSource<IAsyncDisposable>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var previousTask = Interlocked.CompareExchange(ref registrationTask, registrationTcs.Task, null);
+        if (previousTask != null)
+        {
+            await StoreRegistration(await previousTask.ConfigureAwait(false)).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            var anchor = await monacoInterop.RegisterCompletionProvider(this).ConfigureAwait(false);
+            registrationTcs.SetResult(anchor);
+            await StoreRegistration(anchor).ConfigureAwait(false);
+        }
+        catch (Exception e)
+        {
+            registrationTcs.SetException(e);
+            _ = Interlocked.CompareExchange(ref registrationTask, null, registrationTcs.Task);
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        var anchor = registrationAnchor;
-        if (anchor != null)
+        if (Interlocked.Exchange(ref isDisposed, 1) != 0)
         {
-            await anchor.DisposeAsync();
+            return;
         }
+
+        var task = Volatile.Read(ref registrationTask);
+        if (task != null)
+        {
+            try
+            {
+                var anchor = await task.ConfigureAwait(false);
+                await anchor.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is JSException or JSDisconnectedException or OperationCanceledException)
+            {
+            }
+        }
+        else if (registrationAnchor != null)
+        {
+            await registrationAnchor.DisposeAsync().ConfigureAwait(false);
+        }
+
+        documentsByUri.Dispose();
+    }
+
+    private Task StoreRegistration(IAsyncDisposable anchor)
+    {
+        if (Volatile.Read(ref isDisposed) != 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        registrationAnchor = anchor;
+        return Task.CompletedTask;
     }
 
     public IDisposable AddWorkspace(Workspace workspace)
     {
-        lock (workspaces)
-        {
-            workspaces.AddOrUpdate(workspace, _ => 1, (_, existingReferences) => existingReferences + 1);
-        }
+        workspaces.AddOrUpdate(workspace, _ => 1, (_, existingReferences) => existingReferences + 1);
 
         return Disposable.Create(() =>
         {
-            lock (workspaces)
+            var references = workspaces.AddOrUpdate(workspace, _ => 0, (_, existingReferences) => existingReferences - 1);
+            if (references <= 0)
             {
-                var references = workspaces.AddOrUpdate(workspace, _ => 0, (_, existingReferences) => existingReferences - 1);
-                if (references <= 0)
-                {
-                    workspaces.TryRemove(workspace, out var _);
-                }
+                workspaces.TryRemove(new KeyValuePair<Workspace, int>(workspace, references));
             }
         });
     }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
@@ -25,7 +26,9 @@ partial class MonacoDiffEditor : IAsyncDisposable
 
     //concurrent collections are needed as async/load process could be in async mode
     private readonly ConcurrentDictionary<TextModelId, ITextModel> textModelById = new();
-    private readonly ConcurrentDictionary<TextModelId, MonacoTextModelFacade> textModelFacadeById = new();
+    private readonly ConcurrentDictionary<string, MonacoTextModelFacade> textModelFacadeByUri = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Lazy<Task<MonacoTextModelFacade>>> textModelFacadeTasksByUri = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> textModelUriByIdentity = new(StringComparer.Ordinal);
 
     private ElementReference monacoContainer;
     private MonacoDiffEditorFacade? editor;
@@ -226,8 +229,10 @@ partial class MonacoDiffEditor : IAsyncDisposable
         textModelById.TryAdd(localOriginalModel.Id, localOriginalModel);
         textModelById.TryAdd(localModifiedModel.Id, localModifiedModel);
 
-        var remoteOriginalModel = await GetOrCreateRemoteModel(localOriginalModel, cancellationToken);
-        var remoteModifiedModel = await GetOrCreateRemoteModel(localModifiedModel, cancellationToken);
+        var remoteOriginalModelUpdate = await GetOrCreateRemoteModel(localOriginalModel, "original", cancellationToken);
+        var remoteModifiedModelUpdate = await GetOrCreateRemoteModel(localModifiedModel, "modified", cancellationToken);
+        var remoteOriginalModel = remoteOriginalModelUpdate.Model;
+        var remoteModifiedModel = remoteModifiedModelUpdate.Model;
 
         var differentOriginalUri = activeOriginalModel == null || !Equals(activeOriginalModel.Uri, remoteOriginalModel.Uri);
         var differentModifiedUri = activeModifiedModel == null || !Equals(activeModifiedModel.Uri, remoteModifiedModel.Uri);
@@ -238,35 +243,63 @@ partial class MonacoDiffEditor : IAsyncDisposable
             await editor.SetModel(remoteOriginalModel, remoteModifiedModel);
         }
 
+        await DisposeRemoteModels(remoteOriginalModelUpdate.StaleModel, remoteModifiedModelUpdate.StaleModel);
         await UpdateOptionsIfNeeded();
         Logger.LogDebug($"Update completed, reason: {reason}");
     }
 
-    private async Task<MonacoTextModelFacade> GetOrCreateRemoteModel(ITextModel localModel, CancellationToken cancellationToken)
+    private async Task<RemoteModelUpdate> GetOrCreateRemoteModel(ITextModel localModel, string role, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (textModelFacadeById.TryGetValue(localModel.Id, out var modelFacade))
-        {
-            return modelFacade;
-        }
+        var modelUri = MonacoModelUri.Create(Id, localModel, role);
+        var modelKey = modelUri.ToString();
+        var language = AutoDetectLanguage && string.IsNullOrEmpty(LanguageId)
+            ? DetectLanguage(localModel.Path)
+            : LanguageId;
 
-        var modelUri = new Uri($"inmemory://{Id}/{localModel.Id}");
+        var modelFacade = await GetOrCreateRemoteModel(localModel, modelKey, modelUri, language, cancellationToken);
+        await UpdateModelLanguageIfNeeded(modelFacade, language);
+        var staleModel = TrackModelIdentity($"{localModel.Id}:{role}", modelKey);
+        return new RemoteModelUpdate(modelFacade, staleModel);
+    }
+
+    private async Task<MonacoTextModelFacade> GetOrCreateRemoteModel(
+        ITextModel localModel,
+        string modelKey,
+        Uri modelUri,
+        string? language,
+        CancellationToken cancellationToken)
+    {
+        var lazyTask = textModelFacadeTasksByUri.GetOrAdd(
+            modelKey,
+            _ => new Lazy<Task<MonacoTextModelFacade>>(
+                () => CreateRemoteModel(localModel, modelKey, modelUri, language, cancellationToken),
+                LazyThreadSafetyMode.ExecutionAndPublication));
+
+        try
+        {
+            return await lazyTask.Value;
+        }
+        catch
+        {
+            textModelFacadeTasksByUri.TryRemove(new KeyValuePair<string, Lazy<Task<MonacoTextModelFacade>>>(modelKey, lazyTask));
+            throw;
+        }
+    }
+
+    private async Task<MonacoTextModelFacade> CreateRemoteModel(
+        ITextModel localModel,
+        string modelKey,
+        Uri modelUri,
+        string? language,
+        CancellationToken cancellationToken)
+    {
         Logger.LogDebug($"Creating new remote(Monaco) facade for local text model @ {modelUri}: {localModel}");
-
-        string? language;
-        if (AutoDetectLanguage && string.IsNullOrEmpty(LanguageId))
-        {
-            language = DetectLanguage(modelUri);
-        }
-        else
-        {
-            language = LanguageId;
-        }
 
         Logger.LogDebug($"Creating model with language '{language}' @ {modelUri}: {localModel}");
         var actualText = await localModel.GetTextAsync(cancellationToken);
-        var remoteModel = await MonacoInterop.CreateTextModel(modelUri, actualText, language ?? string.Empty);
+        var remoteModel = await MonacoInterop.CreateTextModel(modelUri, actualText, language);
         remoteModel.Anchors.Add(Disposable.Create(() => Logger.LogDebug("Remote(Monaco) text model is being been disposed: {remoteModel}", remoteModel)));
 
         Logger.LogDebug($"Created remote(Monaco) model: {remoteModel}");
@@ -274,8 +307,50 @@ partial class MonacoDiffEditor : IAsyncDisposable
         remoteModel.Anchors.Add(syncCoordinator);
         remoteModel.Anchors.Add(Disposable.Create(() => Logger.LogDebug("Remote(Monaco) text model has been disposed: {remoteModel}", remoteModel)));
 
-        textModelFacadeById[localModel.Id] = remoteModel;
+        textModelFacadeByUri[modelKey] = remoteModel;
         return remoteModel;
+    }
+
+    private MonacoTextModelFacade? TrackModelIdentity(string identityKey, string modelKey)
+    {
+        while (true)
+        {
+            if (!textModelUriByIdentity.TryGetValue(identityKey, out var previousModelKey))
+            {
+                if (textModelUriByIdentity.TryAdd(identityKey, modelKey))
+                {
+                    return null;
+                }
+
+                continue;
+            }
+
+            if (string.Equals(previousModelKey, modelKey, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            if (!textModelUriByIdentity.TryUpdate(identityKey, modelKey, previousModelKey))
+            {
+                continue;
+            }
+
+            textModelFacadeTasksByUri.TryRemove(previousModelKey, out _);
+            return textModelFacadeByUri.TryRemove(previousModelKey, out var previousModel)
+                ? previousModel
+                : null;
+        }
+    }
+
+    private async Task UpdateModelLanguageIfNeeded(MonacoTextModelFacade modelFacade, string? language)
+    {
+        if (string.IsNullOrWhiteSpace(language) || string.Equals(modelFacade.LanguageId, language, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        await MonacoInterop.SetModelLanguage(modelFacade.Uri, language);
+        modelFacade.LanguageId = language;
     }
 
     private async Task UpdateOptionsIfNeeded()
@@ -340,28 +415,57 @@ partial class MonacoDiffEditor : IAsyncDisposable
             await editor.DisposeJsSafeAsync();
         }
 
-        foreach (var textModelFacade in textModelFacadeById.Values)
+        await DisposeAllRemoteModels();
+    }
+
+    private static string? DetectLanguage(string? path)
+    {
+        var extension = Path.GetExtension(path ?? string.Empty)
+            .TrimStart('.')
+            .ToLowerInvariant();
+        return extension switch
+        {
+            "csx" => "csharp",
+            "cs" => "csharp",
+            _ => null
+        };
+    }
+
+    private async ValueTask DisposeAllRemoteModels()
+    {
+        var models = new HashSet<MonacoTextModelFacade>(textModelFacadeByUri.Values);
+        foreach (var lazyTask in textModelFacadeTasksByUri.Values)
+        {
+            if (!lazyTask.IsValueCreated)
+            {
+                continue;
+            }
+
+            try
+            {
+                models.Add(await lazyTask.Value);
+            }
+            catch (Exception e) when (e is TaskCanceledException or OperationCanceledException)
+            {
+            }
+        }
+
+        foreach (var textModelFacade in models)
         {
             await textModelFacade.DisposeJsSafeAsync();
         }
     }
 
-    private static string DetectLanguage(Uri uri)
+    private static async ValueTask DisposeRemoteModels(params MonacoTextModelFacade?[] models)
     {
-        var extension = Path.GetExtension(uri.LocalPath)
-            .TrimStart('.')
-            .ToLowerInvariant();
-        return extension switch
+        foreach (var model in models)
         {
-            "css" => "css",
-            "js" => "javascript",
-            "ts" => "typescript",
-            "html" => "html",
-            "cshtml" => "razor",
-            "razor" => "razor",
-            "csx" => "csharp",
-            "cs" => "csharp",
-            _ => string.Empty
-        };
+            if (model != null)
+            {
+                await model.DisposeJsSafeAsync();
+            }
+        }
     }
+
+    private sealed record RemoteModelUpdate(MonacoTextModelFacade Model, MonacoTextModelFacade? StaleModel);
 }

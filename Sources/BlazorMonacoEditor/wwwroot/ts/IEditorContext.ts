@@ -9,6 +9,7 @@ export interface IEditorContext
 {
     editorId: string;
     codeEditor: monaco.editor.IStandaloneCodeEditor;
+    resizeObserver?: ResizeObserver;
     updating: boolean;
     eventHandler?: EditorEventHandler;
     eventSink?: IBlazorInteropObject;

@@ -50,7 +50,14 @@ public sealed record MonacoUri
         {
             return default;
         }
-        return new Uri($"{Scheme}://{Authority}{Path}");
+
+        var builder = new UriBuilder(Scheme, Authority)
+        {
+            Path = Path,
+            Query = Query ?? string.Empty,
+            Fragment = Fragment ?? string.Empty
+        };
+        return builder.Uri;
     }
 
     public static MonacoUri FromUri(Uri uri)
@@ -59,8 +66,9 @@ public sealed record MonacoUri
         {
             Scheme = uri.Scheme,
             Authority = uri.Authority,
-            Path = uri.PathAndQuery,
-            Fragment = uri.Fragment
+            Path = uri.AbsolutePath,
+            Query = uri.Query.TrimStart('?'),
+            Fragment = uri.Fragment.TrimStart('#')
         };
     }
 }

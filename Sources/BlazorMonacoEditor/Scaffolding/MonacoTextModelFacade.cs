@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Reactive.Disposables;
 using System.Reactive.Subjects;
+using System.Threading;
 using System.Threading.Tasks;
 using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Roslyn;
@@ -19,6 +20,7 @@ namespace BlazorMonacoEditor.Scaffolding
         private readonly MonacoInterop interop;
         private readonly Subject<MonacoTextModelChange> modelContentChangesSink = new();
         private readonly MonacoTextContainer textContainer;
+        private int isDisposed;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MonacoTextModelFacade"/> class.
@@ -100,11 +102,10 @@ namespace BlazorMonacoEditor.Scaffolding
 
         public async ValueTask DisposeAsync()
         {
-            if (Anchors.IsDisposed)
+            if (Interlocked.Exchange(ref isDisposed, 1) != 0)
             {
                 return;
             }
-            Anchors.DisposeJsSafe();
             try
             {
                 await interop.DisposeModel(this);
@@ -112,6 +113,10 @@ namespace BlazorMonacoEditor.Scaffolding
             catch (Exception e) when (e is JSException or JSDisconnectedException)
             {
                 // During disposal ignore such errors because there is a chance that browser context is already disposed
+            }
+            finally
+            {
+                Anchors.DisposeJsSafe();
             }
         }
     }

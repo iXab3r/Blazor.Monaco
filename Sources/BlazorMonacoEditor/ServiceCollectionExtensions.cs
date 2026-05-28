@@ -1,6 +1,7 @@
 ﻿using BlazorMonacoEditor.Interop;
 using BlazorMonacoEditor.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace BlazorMonacoEditor
 {
@@ -14,8 +15,8 @@ namespace BlazorMonacoEditor
         /// </summary>
         public static IServiceCollection AddMonaco(this IServiceCollection services)
         {
-            services.AddScoped<MonacoInterop>();
-            services.AddScoped<IMonacoInterop>(provider => provider.GetService<MonacoInterop>()!);
+            services.TryAddScoped<MonacoInterop>();
+            services.TryAddScoped<IMonacoInterop>(provider => provider.GetRequiredService<MonacoInterop>());
 
             return services;
         }

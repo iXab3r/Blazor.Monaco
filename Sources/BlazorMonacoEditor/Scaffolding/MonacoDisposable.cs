@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.JSInterop;
 
@@ -12,9 +13,22 @@ internal sealed class MonacoDisposable : IAsyncDisposable
     }
     
     public IJSObjectReference JSObjectReference { get; }
+    private int isDisposed;
 
     public async ValueTask DisposeAsync()
     {
-        await JSObjectReference.InvokeVoidAsync("dispose");
+        if (Interlocked.Exchange(ref isDisposed, 1) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await JSObjectReference.InvokeVoidAsync("dispose");
+        }
+        finally
+        {
+            await JSObjectReference.DisposeAsync();
+        }
     }
 }

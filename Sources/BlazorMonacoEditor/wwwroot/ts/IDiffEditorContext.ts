@@ -9,6 +9,7 @@ export interface IDiffEditorContext
 {
     editorId: string;
     diffEditor: monaco.editor.IStandaloneDiffEditor;
+    resizeObserver?: ResizeObserver;
     updating: boolean;
     eventHandler?: EditorEventHandler;
     eventSink?: IBlazorInteropObject;

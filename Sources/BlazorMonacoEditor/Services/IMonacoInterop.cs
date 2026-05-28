@@ -24,6 +24,10 @@ public interface IMonacoInterop
 
     ValueTask SetModelMarkers(Uri modelUri, string markersOwner, IReadOnlyList<MarkerData> markers);
 
+    ValueTask SetModelLanguage(Uri modelUri, string languageId);
+
+    ValueTask<MonacoRuntimeSnapshot> GetRuntimeSnapshot();
+
     ValueTask<bool> ShowModelNotification(Uri modelUri, string message, string severity = "warning", int timeoutMs = 4500, bool closeable = false);
 
     ValueTask<bool> SetModelContent(Uri modelUri, string newContent, int? expectedVersionId = null);
