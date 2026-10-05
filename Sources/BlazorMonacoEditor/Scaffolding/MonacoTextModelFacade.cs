@@ -85,7 +85,8 @@ namespace BlazorMonacoEditor.Scaffolding
             return await interop.SetModelContent(Uri, content, expectedVersionId);
         }
 
-        public async ValueTask ApplyChanges(IReadOnlyList<IdentifiedSingleEditOperation> operations)
+        /// <summary>Applies edits only while their optional coordinate-basis content is current.</summary>
+        public async ValueTask ApplyChanges(IReadOnlyList<IdentifiedSingleEditOperation> operations, string? expectedContent = null)
         {
             if (operations == null)
             {
@@ -97,7 +98,7 @@ namespace BlazorMonacoEditor.Scaffolding
                 return;
             }
 
-            await interop.ExecuteModelEdits(Uri, operations);
+            await interop.ExecuteModelEdits(Uri, operations, expectedContent);
         }
 
         public async ValueTask DisposeAsync()

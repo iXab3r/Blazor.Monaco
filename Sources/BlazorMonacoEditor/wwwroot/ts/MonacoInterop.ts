@@ -339,8 +339,12 @@ class MonacoInterop {
         this.logger.debug(`Disposed text model with Uri ${textModelUri}, id: ${modelCtxt.textModel.id}`);
     }
 
-    executeModelEdits(textModelUri: string, edits: monaco.editor.IIdentifiedSingleEditOperation[]) {
+    executeModelEdits(textModelUri: string, edits: monaco.editor.IIdentifiedSingleEditOperation[], expectedContent?: string | null) {
         const modelCtxt = this.getTextModelByUri(textModelUri);
+        // Coordinate edits cannot be rebased onto text typed while interop was in flight.
+        if (expectedContent != null && modelCtxt.textModel.getValue() !== expectedContent) {
+            return;
+        }
         modelCtxt.textModel.pushEditOperations(null, edits, () => null);
     }
 

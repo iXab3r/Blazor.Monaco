@@ -18,7 +18,7 @@ internal sealed class TextSyncCoordinator : IDisposable
     private readonly ITextModel localModel;
     private readonly ILogger logger;
     private readonly Func<SourceText> getRemoteTextSnapshot;
-    private readonly Func<IReadOnlyList<IdentifiedSingleEditOperation>, CancellationToken, ValueTask> applyLocalChangesToRemoteAsync;
+    private readonly Func<IReadOnlyList<IdentifiedSingleEditOperation>, SourceText, CancellationToken, ValueTask> applyLocalChangesToRemoteAsync;
 
     public TextSyncCoordinator(
         ITextModel localModel,
@@ -28,7 +28,7 @@ internal sealed class TextSyncCoordinator : IDisposable
             localModel,
             remoteModel?.WhenContentChanged ?? throw new ArgumentNullException(nameof(remoteModel)),
             () => remoteModel.Text,
-            (changes, _) => remoteModel.ApplyChanges(changes),
+            (changes, basis, _) => remoteModel.ApplyChanges(changes, basis.ToString()),
             logger)
     {
     }
@@ -37,7 +37,7 @@ internal sealed class TextSyncCoordinator : IDisposable
         ITextModel localModel,
         IObservable<MonacoTextModelChange> remoteChanges,
         Func<SourceText> getRemoteTextSnapshot,
-        Func<IReadOnlyList<IdentifiedSingleEditOperation>, CancellationToken, ValueTask> applyLocalChangesToRemoteAsync,
+        Func<IReadOnlyList<IdentifiedSingleEditOperation>, SourceText, CancellationToken, ValueTask> applyLocalChangesToRemoteAsync,
         ILogger logger)
     {
         this.localModel = localModel ?? throw new ArgumentNullException(nameof(localModel));
@@ -73,7 +73,7 @@ internal sealed class TextSyncCoordinator : IDisposable
             localModel,
             remoteChanges,
             () => initialSynchronizedLocalText ?? SourceText.From(string.Empty),
-            async (_, cancellationToken) =>
+            async (_, _, cancellationToken) =>
             {
                 var textToPush = await localModel.GetTextAsync(cancellationToken);
                 await pushLocalTextToRemoteAsync(textToPush.ToString(), null, cancellationToken);
@@ -140,7 +140,9 @@ internal sealed class TextSyncCoordinator : IDisposable
             remoteText.Length,
             localText.Length);
 
-        await applyLocalChangesToRemoteAsync(localToRemoteChanges, cancellationToken);
+        // These coordinates belong to this immutable remote snapshot. The browser must
+        // discard the batch if typing has changed its content before interop applies it.
+        await applyLocalChangesToRemoteAsync(localToRemoteChanges, remoteText, cancellationToken);
 
         logger.LogDebug(
             "Applied local->remote diffs for model {ModelId}: {OperationCount} operation(s)",
