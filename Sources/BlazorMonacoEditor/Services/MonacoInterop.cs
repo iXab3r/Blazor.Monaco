@@ -233,7 +233,14 @@ namespace BlazorMonacoEditor.Services
 
         public async ValueTask ExecuteModelEdits(Uri modelUri, IReadOnlyList<IdentifiedSingleEditOperation> operations)
         {
-            await InvokeVoidAsync("executeModelEdits", modelUri.ToString(), operations);
+            await ExecuteModelEdits(modelUri, operations, null);
+        }
+
+        /// <summary>Applies coordinate edits only when the browser still contains their basis text.</summary>
+        /// <remarks>A stale batch is discarded; null preserves unguarded compatibility. The basis is transported with the edits.</remarks>
+        public async ValueTask ExecuteModelEdits(Uri modelUri, IReadOnlyList<IdentifiedSingleEditOperation> operations, string? expectedContent)
+        {
+            await InvokeVoidAsync("executeModelEdits", modelUri.ToString(), operations, expectedContent);
         }
 
         public async ValueTask SetDiffEditorModel(MonacoEditorId editorId, Uri originalModelUri, Uri modifiedModelUri)
