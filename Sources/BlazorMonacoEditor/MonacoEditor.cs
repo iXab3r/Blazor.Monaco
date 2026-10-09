@@ -206,6 +206,12 @@ partial class MonacoEditor : IAsyncDisposable
         var remoteModelUpdate = await GetOrCreateRemoteModel(localModel, cancellationToken);
         var remoteModel = remoteModelUpdate.Model;
         
+        // Apply read-only protection before the first model becomes visible.
+        if (activeModel == null)
+        {
+            await UpdateOptionsIfNeeded();
+        }
+
         var differentUri = activeModel == null || !Equals(activeModel.Uri, remoteModel.Uri);
         if (differentUri)
         {
