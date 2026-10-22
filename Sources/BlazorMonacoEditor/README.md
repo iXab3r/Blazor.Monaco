@@ -1,14 +1,17 @@
-# Architecture
-## Interop and general stuff
-- Monaco dependencies and code are about ~10MB in total, meaning that if we want to use it effectively
-  it has to be loaded only once (i.e. no JS/CSS isolation) => Singleton on JS side 
-- Singleton on JS side is in MonacoInterop.ts, on C# in MonacoInterop.cs (scoped dependency)
-- TextModels are represented by URIs, which are immutable. It is also possible to reference models by ID, but it 
-  does not make a lot of sense considering URI is unique enough and we're not expecting to have multiple copies of 
-  the same file opened (source code splicing will need it though)
-- IDs are not unique across editors, they look something like '$model1'
+# Core architecture
 
-## AutoComplete
-- registerCompletionProvider in Monaco is a singleton, i.e. it is expected 
-  that completion provider can serve any model loaded into any editor, meaning that on top-level it also has to be singleton
-- 
+## Interop lifetime
+
+[MonacoInterop.ts](wwwroot/ts/MonacoInterop.ts) reuses a browser-window instance through `window.__eyeAurasMonacoInterop` and exposes it as `window.monacoInterop`. It manages editor and text-model contexts. The C# [MonacoInterop](Services/MonacoInterop.cs) service is registered with scoped lifetime by [AddMonaco](ServiceCollectionExtensions.cs); it is not a process-wide singleton.
+
+Authored TypeScript lives in `wwwroot/ts/`. Webpack emits the browser bundles into `wwwroot/js/`; the project build orchestrates npm and webpack.
+
+## Model identity and synchronization
+
+[MonacoModelUri](Scaffolding/MonacoModelUri.cs) creates an `inmemory` URI using the editor ID, normalized path, model ID, and role. The same logical file can therefore have distinct editor/role contexts. Preserve this isolation instead of treating a filename or Monaco-generated model ID as the application's unique identity.
+
+[TextSyncCoordinator](Scaffolding/TextSyncCoordinator.cs) coordinates model text changes. Keep edit coordinate bases and change provenance intact; see [the regression tests](../BlazorMonacoEditor.Tests/TextSyncCoordinatorFixture.cs) and [model identity tests](../BlazorMonacoEditor.Tests/MonacoModelUriFixture.cs).
+
+## Language providers
+
+Monaco language-provider registration applies to a language and can receive requests from multiple models/editors. The interop forwards the model URI to the .NET provider. Registration returns a disposable anchor; preserve registration/facade ownership and disposal ordering. Language-wide registration does not imply that every .NET provider must have singleton lifetime.
